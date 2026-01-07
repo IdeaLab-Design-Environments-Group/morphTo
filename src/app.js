@@ -123,6 +123,20 @@ let _syncingConstraints = false;
 let _writingEditorFromShape = false;       
 let _writingEditorFromConstraints = false;  
 
+// --- multi-document editor state ---
+let editorDocs = []; // [{id, name, cmDoc, pendingConstraints}]
+let activeDocId = null;
+let _switchingDoc = false;
+
+function _newDocId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (_) {}
+  return `doc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 
 window.interpreter = null;
 
@@ -275,7 +289,7 @@ function setupCodeMirror() {
   
   let timeout;
   editor.on('change', () => {
-    if (syncingFromBlocks || _writingEditorFromShape || _writingEditorFromConstraints) return;
+    if (_switchingDoc || syncingFromBlocks || _writingEditorFromShape || _writingEditorFromConstraints) return;
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       runCode();
@@ -285,6 +299,149 @@ function setupCodeMirror() {
       }
     }, 300);
   });  
+
+  initDocTabs();
+}
+
+function initDocTabs() {
+  if (!editor) return;
+
+  if (!Array.isArray(editorDocs) || editorDocs.length === 0) {
+    const initialCode = editor.getValue?.() ?? '';
+    const first = {
+      id: _newDocId(),
+      name: 'Untitled 1',
+      cmDoc: new CodeMirror.Doc(initialCode, 'aqui'),
+      pendingConstraints: []
+    };
+    editorDocs = [first];
+    activeDocId = first.id;
+
+    _switchingDoc = true;
+    editor.swapDoc(first.cmDoc);
+    _switchingDoc = false;
+  }
+
+  renderDocTabs();
+}
+
+function getActiveDoc() {
+  return editorDocs.find(d => d.id === activeDocId) || null;
+}
+
+function renderDocTabs() {
+  const tabsEl = document.getElementById('doc-tabs');
+  if (!tabsEl) return;
+
+  tabsEl.innerHTML = '';
+
+  for (const d of editorDocs) {
+    const tab = document.createElement('div');
+    tab.className = 'doc-tab' + (d.id === activeDocId ? ' active' : '');
+    tab.dataset.docId = d.id;
+
+    const title = document.createElement('div');
+    title.className = 'doc-tab-title';
+    title.textContent = d.name;
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'doc-tab-close';
+    close.textContent = '×';
+    close.title = 'Close';
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDoc(d.id);
+    });
+
+    tab.appendChild(title);
+    tab.appendChild(close);
+
+    tab.addEventListener('click', () => switchDoc(d.id));
+    tab.addEventListener('dblclick', () => renameDoc(d.id));
+    tabsEl.appendChild(tab);
+  }
+}
+
+function renameDoc(docId) {
+  const doc = editorDocs.find(d => d.id === docId);
+  if (!doc) return;
+
+  const nextName = window.prompt('Rename tab:', doc.name);
+  if (nextName == null) return; // cancelled
+
+  const trimmed = String(nextName).trim();
+  if (!trimmed) return;
+
+  doc.name = trimmed;
+  renderDocTabs();
+}
+
+function newDoc() {
+  const n = editorDocs.length + 1;
+  const doc = {
+    id: _newDocId(),
+    name: `Untitled ${n}`,
+    cmDoc: new CodeMirror.Doc('//Otto by the IdeaLab Fablab\n\n', 'aqui'),
+    pendingConstraints: []
+  };
+  editorDocs.push(doc);
+  switchDoc(doc.id);
+}
+
+function closeDoc(docId) {
+  if (editorDocs.length <= 1) return;
+
+  const idx = editorDocs.findIndex(d => d.id === docId);
+  if (idx < 0) return;
+
+  const wasActive = docId === activeDocId;
+  editorDocs.splice(idx, 1);
+
+  if (wasActive) {
+    const next = editorDocs[Math.max(0, idx - 1)];
+    switchDoc(next.id);
+  } else {
+    renderDocTabs();
+  }
+}
+
+function switchDoc(docId) {
+  if (!editor || docId === activeDocId) return;
+
+  const next = editorDocs.find(d => d.id === docId);
+  if (!next) return;
+
+  // Save per-doc pending constraints
+  const current = getActiveDoc();
+  if (current) {
+    current.pendingConstraints = Array.isArray(window.__pendingConstraints)
+      ? window.__pendingConstraints
+      : [];
+  }
+
+  // Load pending constraints for next doc
+  window.__pendingConstraints = next.pendingConstraints || [];
+
+  activeDocId = docId;
+
+  _switchingDoc = true;
+  editor.swapDoc(next.cmDoc);
+  _switchingDoc = false;
+
+  renderDocTabs();
+
+  // Keep blocks view in sync when switching tabs
+  if (editorMode === 'blocks' && blocklyWorkspace) {
+    try {
+      rebuildWorkspaceFromAqui(editor.getValue(), blocklyWorkspace);
+      refreshBlockly();
+    } catch (e) {
+      console.warn('Doc switch: rebuildWorkspaceFromAqui failed:', e);
+    }
+  }
+
+  runCode();
 }
 
 async function initBlockly() {
@@ -652,6 +809,11 @@ function setupEventHandlers() {
       switchTab(targetTab);
     });
   });
+
+  const docNewBtn = document.getElementById('doc-new');
+  if (docNewBtn) {
+    docNewBtn.addEventListener('click', () => newDoc());
+  }
 
   document.getElementById('toggle-editor-mode').addEventListener('click', () => {
     const textContainer   = document.getElementById('text-editor-container');

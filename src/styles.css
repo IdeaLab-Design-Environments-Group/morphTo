@@ -123,6 +123,79 @@ body {
   background: #d0d0d0;
 }
 
+/* Multi-document tabs (Code editor) */
+.editor-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.doc-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  padding: 2px 4px;
+  min-height: 40px;
+}
+
+.doc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  min-width: 160px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: #f6f6f6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.doc-tab.active {
+  background: white;
+  border-color: #FF5722;
+}
+
+.doc-tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-tab-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.doc-tab-close:hover {
+  opacity: 1;
+}
+
+.doc-tab-add {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
 .button.error {
   background: #ffebee;
 }
