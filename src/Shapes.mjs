@@ -1639,6 +1639,109 @@ class FlexureMesh extends Shape {
 }
 
 
+class Bspline extends Shape {
+  constructor(points = [], closed = false, degree = 3) {
+    super();
+    this.points = points;
+    this.closed = closed;
+    this.degree = degree;
+  }
+
+  getPoints(segments = 100) {
+    if (!this.points || this.points.length < 2) {
+      return [];
+    }
+
+    if (this.points.length < 4) {
+      return this.points
+        .map(point => ({
+          x: point?.[0] ?? 0,
+          y: point?.[1] ?? 0
+        }))
+        .map(p => this.transformPoint(p));
+    }
+
+    const result = [];
+    const numSegments = this.closed ? this.points.length : Math.max(1, this.points.length - 3);
+    const pointsPerSegment = Math.max(1, Math.floor(segments / numSegments));
+
+    for (let i = 0; i < numSegments; i++) {
+      const p0 = this.points[i % this.points.length];
+      const p1 = this.points[(i + 1) % this.points.length];
+      const p2 = this.points[(i + 2) % this.points.length];
+      const p3 = this.points[(i + 3) % this.points.length];
+
+      for (let t = 0; t <= pointsPerSegment; t++) {
+        const tNorm = t / pointsPerSegment;
+        const point = this.cubicBSplinePoint(tNorm, p0, p1, p2, p3);
+        result.push(point);
+      }
+    }
+
+    const cleaned = [];
+    for (let i = 0; i < result.length; i++) {
+      if (
+        i === 0 ||
+        Math.abs(result[i].x - result[i - 1].x) > 0.001 ||
+        Math.abs(result[i].y - result[i - 1].y) > 0.001
+      ) {
+        cleaned.push(result[i]);
+      }
+    }
+
+    return cleaned.map(p => this.transformPoint(p));
+  }
+
+  cubicBSplinePoint(t, p0, p1, p2, p3) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+    const mt3 = mt2 * mt;
+
+    const b0 = mt3 / 6;
+    const b1 = (3 * t3 - 6 * t2 + 4) / 6;
+    const b2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6;
+    const b3 = t3 / 6;
+
+    return {
+      x: b0 * p0[0] + b1 * p1[0] + b2 * p2[0] + b3 * p3[0],
+      y: b0 * p0[1] + b1 * p1[1] + b2 * p2[1] + b3 * p3[1]
+    };
+  }
+
+  getBoundingBox() {
+    if (!this.points || this.points.length === 0) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const point of this.points) {
+      if (!point || !Array.isArray(point) || point.length < 2) continue;
+      const x = point[0];
+      const y = point[1];
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+
+    if (minX !== Infinity && maxX !== -Infinity && minY !== Infinity && maxY !== -Infinity) {
+      return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+    }
+
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+}
+
+
 const ShapeUtils = {
   // Boolean operations
   union(shape1, shape2) {
@@ -1726,7 +1829,8 @@ export {
   FingerCombFemale,
   RabbetJoint,
   RabbetPlain,
-  FlexureMesh, 
+  FlexureMesh,
+  Bspline,
   ShapeUtils,
 };
 

@@ -304,6 +304,9 @@ function createDXFShapeWithMMConversion(shape, shapeName, canvasTransform, layer
       case 'path':
         entity = createDXFPath(convertedParams, dxfTransform, layerName);
         break;
+      case 'bspline':
+        entity = createDXFPath(convertedParams, dxfTransform, layerName);
+        break;
       case 'text':
         entity = createDXFText(convertedParams, dxfTransform, layerName);
         break;
@@ -391,6 +394,13 @@ function convertShapeParamsToDXF(type, params) {
         converted.subPaths = converted.subPaths.map(path => convertPointsToDXF(path));
       }
       return convertDimensionsToDXF(converted, ['strokeWidth', 'thickness']);
+    
+    case 'bspline':
+      const bsplineConverted = { ...params };
+      if (bsplineConverted.points) {
+        bsplineConverted.points = convertPointsToDXF(bsplineConverted.points);
+      }
+      return convertDimensionsToDXF(bsplineConverted, ['strokeWidth', 'thickness']);
     
     default:
       return convertDimensionsToDXF(params, ['width', 'height', 'radius', 'strokeWidth', 'thickness']);

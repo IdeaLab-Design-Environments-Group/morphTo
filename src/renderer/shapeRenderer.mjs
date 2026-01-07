@@ -32,6 +32,7 @@ import {
   RabbetJoint,
   RabbetPlain,
   FlexureMesh,
+  Bspline,
 } from "../Shapes.mjs";
 
 export class ShapeRenderer {
@@ -166,6 +167,69 @@ export class ShapeRenderer {
     }
 
     return true;
+  }
+
+  renderBspline(params, styleContext, isSelected, isHovered) {
+    if (!params.points || params.points.length < 2) return false;
+    
+    const splineInstance = this.createShapeInstance("bspline", params);
+    if (!splineInstance) return false;
+    
+    const numControlPoints = params.points.length;
+    const baseSegments = Math.max(200, numControlPoints * 30);
+    const points = splineInstance.getPoints(baseSegments);
+    if (!points || points.length === 0) return false;
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(points[0].x, points[0].y);
+    
+    for (let i = 1; i < points.length; i++) {
+      this.ctx.lineTo(points[i].x, points[i].y);
+    }
+    
+    if (params.closed === true) {
+      this.ctx.closePath();
+      if (styleContext.shouldFill) {
+        this.ctx.fill();
+      }
+    }
+    
+    this.ctx.stroke();
+    
+    if (isSelected && params.showControlPoints !== false) {
+      this.renderBsplineControlPoints(params.points);
+    }
+    
+    return true;
+  }
+
+  renderBsplineControlPoints(controlPoints = []) {
+    if (controlPoints.length < 2) return;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = "#999999";
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([3, 3]);
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(controlPoints[0][0], controlPoints[0][1]);
+    for (let i = 1; i < controlPoints.length; i++) {
+      this.ctx.lineTo(controlPoints[i][0], controlPoints[i][1]);
+    }
+    this.ctx.stroke();
+
+    this.ctx.setLineDash([]);
+    for (let i = 0; i < controlPoints.length; i++) {
+      this.ctx.beginPath();
+      this.ctx.arc(controlPoints[i][0], controlPoints[i][1], 4, 0, Math.PI * 2);
+      this.ctx.fillStyle = "#2196F3";
+      this.ctx.fill();
+      this.ctx.strokeStyle = "#000000";
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
   }
 
   renderGenericShape(type, params, styleContext, isSelected, isHovered) {
@@ -399,6 +463,12 @@ export class ShapeRenderer {
             params.outerPoints || [],
             params.holes || [],
           );
+      case "bspline":
+        return new Bspline(
+          params.points || [[0, 0], [50, 50], [100, 0]],
+          params.closed === true,
+          params.degree || 3
+        );
         default:
           return new Rectangle(100, 100);
       }

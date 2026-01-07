@@ -1,0 +1,27 @@
+//Otto by the IdeaLab Fablab
+// ========== CHEMKIT1: CIRCLE WITH HORIZONTAL RECTANGULAR CUT-OUT ==========
+// ---------- Parameters ----------
+param circleRadius 100
+param cutoutWidth 30
+param cutoutLength 60
+// ---------- Main Circle ----------
+shape circle mainCircle {
+  position: [0, 0]
+  radius: circleRadius
+  fill: false
+}
+// ---------- Horizontal Rectangular Cut-out ----------
+// Positioned on the right side, extending from the edge towards the center
+// The rectangle is centered vertically and positioned so it cuts from the right edge
+shape rectangle cutoutRect {
+  position: [circleRadius - cutoutLength/2, 0]
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+// ---------- Apply Cut-out Using Difference ----------
+difference chemkit1 {
+  add mainCircle
+  add cutoutRect
+}
+

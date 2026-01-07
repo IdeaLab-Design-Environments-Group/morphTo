@@ -224,6 +224,9 @@ function createSVGShapeWithMMConversion(shape, shapeName, svgNS, canvasTransform
       case 'path':
         element = createSVGPathMM(convertedParams, svgNS);
         break;
+      case 'bspline':
+        element = createSVGPathMM(convertedParams, svgNS);
+        break;
       case 'circle':
         element = createSVGCircleMM(convertedParams, svgNS);
         break;
@@ -358,6 +361,13 @@ function convertShapeParams(type, params) {
         converted.subPaths = converted.subPaths.map(path => convertPoints(path));
       }
       return convertDimensions(converted, ['strokeWidth', 'thickness']);
+    
+    case 'bspline':
+      const bsplineConverted = { ...params };
+      if (bsplineConverted.points) {
+        bsplineConverted.points = convertPoints(bsplineConverted.points);
+      }
+      return convertDimensions(bsplineConverted, ['strokeWidth', 'thickness']);
     
     default:
       // For unknown types, convert common dimension properties

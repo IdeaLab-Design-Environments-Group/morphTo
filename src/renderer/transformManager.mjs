@@ -132,6 +132,12 @@ export class TransformManager {
           x: -slotLength / 2, y: -slotWidth / 2,
           width: slotLength, height: slotWidth
         };
+
+      case 'bspline':
+        if (params.points && params.points.length > 0) {
+          return this.calculatePathBounds(params.points);
+        }
+        return { x: -25, y: -25, width: 50, height: 50 };
         
       case 'path':
         if (params.points && params.points.length > 0) {

@@ -1,0 +1,39 @@
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+// ========== CHEMKIT2: RECTANGLE WITH TWO CUT-OUTS FROM LONG EDGES ==========
+// ---------- Parameters ----------
+param rectWidth 300
+param rectHeight 100
+param cutoutWidth 30
+param cutoutLength 60
+// ---------- Main Rectangle ----------
+shape rectangle mainRect {
+  position: [0, 0]
+  width: rectWidth
+  height: rectHeight
+  fill: false
+}
+// ---------- Left Cut-out (penetrating from left long edge) ----------
+shape rectangle leftCutout {
+  position: [-rectWidth/2 + cutoutLength/2, 0]
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+// ---------- Right Cut-out (penetrating from right long edge) ----------
+shape rectangle rightCutout {
+  position: [rectWidth/2 - cutoutLength/2, 0]
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+// ---------- Apply Cut-outs Using Difference ----------
+difference step1 {
+  add mainRect
+  add leftCutout
+}
+difference chemkit2 {
+  add step1
+  add rightCutout
+}
+

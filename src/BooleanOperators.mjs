@@ -30,7 +30,8 @@ import {
     SlotBoard,
     TabBoard,
     FingerCombMale,
-    FingerCombFemale
+    FingerCombFemale,
+    Bspline
 } from './Shapes.mjs';
 
 class BooleanNaming {
@@ -725,6 +726,7 @@ class BooleanNaming {
         case 'roundedRectangle': return new RoundedRectangle(p.width || 100, p.height || 100, p.radius || 10);
         case 'arrow': return new Arrow(p.length || 100, p.headWidth || 30, p.headLength || 25);
         case 'beziercurve': return new BezierCurve(p.startX, p.startY, p.cp1x, p.cp1y, p.cp2x, p.cp2y, p.endX, p.endY);
+        case 'bspline': return new Bspline(p.points || [[0, 0], [50, 50], [100, 0]], p.closed === true, p.degree || 3);
         case 'donut': 
           const boolStartAngle = p.startAngle != null ? Number(p.startAngle) : undefined;
           const boolEndAngle = p.endAngle != null ? Number(p.endAngle) : undefined;
@@ -767,7 +769,7 @@ class BooleanNaming {
     }
   
     _getShapeResolution(type) {
-      const curved = ['circle','ellipse','arc','roundedrectangle','spiral','donut','wave'];
+      const curved = ['circle','ellipse','arc','roundedrectangle','spiral','donut','wave','bspline'];
       // Increase sampling resolution to reduce boolean artifacts on curved edges
       return curved.includes(type.toLowerCase()) ? 128 : 64;
     }

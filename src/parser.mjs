@@ -1000,7 +1000,8 @@ export class Parser {
       ellipse: { radiusX: 60, radiusY: 40, fill: false },
       polygon: { radius: 50, sides: 6, fill: false },
       star: { outerRadius: 50, innerRadius: 20, points: 5, fill: false },
-      text: { fontSize: 16, fontFamily: 'Arial', fill: true, fillColor: '#000000' }
+      text: { fontSize: 16, fontFamily: 'Arial', fill: true, fillColor: '#000000' },
+      bspline: { points: [[0, 0], [50, 50], [100, 0]], closed: false, degree: 3, fill: false }
     };
     
     const shapeDefaults = defaults[shapeType] || {};

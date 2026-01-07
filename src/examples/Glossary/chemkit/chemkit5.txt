@@ -1,0 +1,118 @@
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+param circleRadius 100
+param cutoutWidth 20
+param cutoutLength 60
+param rectWidth 300
+param rectHeight 100
+param move1 220
+param move2 90
+shape circle mainCircle {
+  opacity: 0.8
+  strokeWidth: 2
+  position: [2, -3]
+  radius: circleRadius
+  fill: false
+}
+shape rectangle topCutout {
+  rotation: -45
+  position: [40, -10+circleRadius - cutoutLength/2]
+  width: cutoutWidth
+  height: cutoutLength
+  fill: false
+}
+difference chemkit3 {
+  add mainCircle
+  add topCutout
+}
+shape rectangle mainRect {
+  position: [-70 +move1, -76]
+  rotation: -30
+  width: rectWidth
+  height: rectHeight
+  fill: false
+}
+shape rectangle leftCutout {
+  position: [-177 +move1, -22]
+  rotation: -30
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+shape rectangle rightCutout {
+  position: [-84 + rectWidth/2+ move1 - cutoutLength/2, -130 -6]
+  rotation: -30
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+difference step1 {
+  add mainRect
+  add leftCutout
+}
+difference chemkit2 {
+  add step1
+  add rightCutout
+}
+shape rectangle mainRect1 {
+  position: [-170, -71]
+  rotation: 30
+  width: rectWidth
+  height: rectHeight
+  fill: false
+}
+shape rectangle leftCutout1 {
+  position: [-275, -133]
+  rotation: 30
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+shape rectangle rightCutout1 {
+  position: [-60, -9]
+  rotation: 30
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+difference step11 {
+  add mainRect1
+  add leftCutout1
+}
+difference chemkit21 {
+  add step11
+  add rightCutout1
+}
+shape rectangle mainRect2 {
+  position: [-6, 222]
+  rotation: 90
+  width: rectWidth
+  height: rectHeight
+  fill: false
+}
+shape rectangle rightCutout2 {
+  position: [-4, 347]
+  rotation: 90
+  width: cutoutLength
+  height: cutoutWidth
+  fill: false
+}
+union a {
+  add chemkit3
+  add chemkit21
+}
+union b {
+  add chemkit3
+  add chemkit2
+}
+difference step222 {
+  add mainRect2
+  add rightCutout2
+}
+union c {
+  add chemkit3
+  add step222
+}
+

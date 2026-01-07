@@ -1384,6 +1384,13 @@ class ModularRenderingEngine {
             isSelected,
             isHovered,
           );
+        case "bspline":
+          return this.shapeRenderer.renderBspline(
+            params,
+            styleContext,
+            isSelected,
+            isHovered,
+          );
         case "tabBoard":
           return this.shapeRenderer.renderTabBoard(
             params,

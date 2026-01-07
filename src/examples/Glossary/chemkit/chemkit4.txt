@@ -1,0 +1,57 @@
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+//Otto by the IdeaLab Fablab
+param bodyWidth 400
+param bodyHeight 200
+param leftWidth 120
+param slotWidth 80
+param slotLength 120
+param circleRadius 30
+param circleSpacing 60
+param backCircleRadius 100
+shape path mainBody {
+  position: [0, 0]
+  points: [
+    [-bodyWidth/2, -leftWidth/2],
+    [-bodyWidth/2, leftWidth/2],
+    [bodyWidth/2, bodyHeight/2],
+    [bodyWidth/2, -bodyHeight/2]
+  ]
+  closed: true
+  fill: false
+}
+shape circle backCircle {
+  position: [bodyWidth/2, 0]
+  radius: backCircleRadius
+  fill: false
+}
+union roundedBody {
+  add mainBody
+  add backCircle
+}
+shape rectangle leftSlot {
+  position: [-bodyWidth/2 + slotLength/2, 0]
+  width: slotLength
+  height: slotWidth
+  fill: false
+}
+shape circle topCircle {
+  position: [68, -46]
+  radius: circleRadius
+  fill: false
+}
+shape circle bottomCircle {
+  position: [67, 35]
+  radius: circleRadius
+  fill: false
+}
+difference step1 {
+  add roundedBody
+  add leftSlot
+}
+union d {
+  add step1
+  add backCircle
+  
+}
+
