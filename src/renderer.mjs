@@ -56,6 +56,7 @@ export class Renderer {
     this.debugMode = false;
     this.updateCodeCallback = null;
     this.shapeManager = shapeManager;
+    this.zoomControls = null;
   }
 
   addOverlayDrawer(drawFn) {
@@ -159,6 +160,7 @@ export class Renderer {
   setupCanvas() {
     this.coordinateSystem.setupCanvas();
     this.createGridToggleButton();
+    this.createZoomControls();
     this.redraw();
   }
 
@@ -222,6 +224,82 @@ export class Renderer {
       this.updateGridButtonState();
     } catch (error) {
       console.error("Error creating grid toggle button:", error);
+    }
+  }
+
+  createZoomControls() {
+    try {
+      const container = this.canvas.parentElement;
+      if (!container) return;
+
+      const existing = container.querySelector('.canvas-zoom-controls');
+      if (existing) existing.remove();
+
+      const controls = document.createElement('div');
+      controls.className = 'canvas-zoom-controls';
+
+      const zoomInBtn = document.createElement('button');
+      zoomInBtn.type = 'button';
+      zoomInBtn.className = 'zoom-button';
+      zoomInBtn.textContent = '+';
+
+      const zoomLevelEl = document.createElement('div');
+      zoomLevelEl.className = 'zoom-level';
+      zoomLevelEl.id = 'canvas-zoom-level';
+
+      const zoomOutBtn = document.createElement('button');
+      zoomOutBtn.type = 'button';
+      zoomOutBtn.className = 'zoom-button';
+      zoomOutBtn.textContent = '-';
+
+      zoomInBtn.addEventListener('click', () => {
+        const changed = this.coordinateSystem.zoomIn(this.canvas.width / 2, this.canvas.height / 2);
+        if (changed) {
+          this.updateZoomDisplay();
+          this.redraw();
+        }
+      });
+
+      zoomOutBtn.addEventListener('click', () => {
+        const changed = this.coordinateSystem.zoomOut(this.canvas.width / 2, this.canvas.height / 2);
+        if (changed) {
+          this.updateZoomDisplay();
+          this.redraw();
+        }
+      });
+
+      controls.appendChild(zoomInBtn);
+      controls.appendChild(zoomLevelEl);
+      controls.appendChild(zoomOutBtn);
+
+      container.appendChild(controls);
+      this.zoomControls = {
+        container: controls,
+        zoomLevelEl,
+        zoomInBtn,
+        zoomOutBtn
+      };
+
+      this.updateZoomDisplay();
+    } catch (error) {
+      console.error("Error creating zoom controls:", error);
+    }
+  }
+
+  updateZoomDisplay() {
+    if (!this.zoomControls || !this.zoomControls.zoomLevelEl) return;
+
+    const zoomPercent = Math.round(this.coordinateSystem.zoomLevel * 100);
+    this.zoomControls.zoomLevelEl.textContent = `${zoomPercent}%`;
+
+    if (this.zoomControls.zoomInBtn) {
+      this.zoomControls.zoomInBtn.disabled =
+        this.coordinateSystem.zoomLevel >= this.coordinateSystem.maxZoom - 0.0001;
+    }
+
+    if (this.zoomControls.zoomOutBtn) {
+      this.zoomControls.zoomOutBtn.disabled =
+        this.coordinateSystem.zoomLevel <= this.coordinateSystem.minZoom + 0.0001;
     }
   }
 
@@ -296,16 +374,18 @@ export class Renderer {
         return;
       }
 
+      const scaleFactor = this.coordinateSystem.getScaleFactor();
       const transformContext = this.transformManager.createContext(
         shape.transform,
         this.coordinateSystem.transformX(shape.transform.position[0]),
         this.coordinateSystem.transformY(shape.transform.position[1]),
-        1,
+        scaleFactor,
       );
 
       this.ctx.save();
       this.ctx.translate(transformContext.screenX, transformContext.screenY);
       this.ctx.rotate(-transformContext.rotation);
+      this.ctx.scale(scaleFactor, scaleFactor);
 
       const styleContext = this.styleManager.createStyleContext(
         shape,
@@ -685,6 +765,8 @@ export class Renderer {
 
   resetView() {
     this.coordinateSystem.setPanOffset(0, 0);
+    this.coordinateSystem.resetZoom();
+    this.updateZoomDisplay();
     this.redraw();
   }
 
@@ -712,7 +794,9 @@ export class Renderer {
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
-    this.coordinateSystem.setPanOffset(-centerX, centerY);
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
+    this.coordinateSystem.setPanOffset(-centerX * scaleFactor, centerY * scaleFactor);
+    this.updateZoomDisplay();
     this.redraw();
   }
 
@@ -740,6 +824,7 @@ export class Renderer {
       canvas: bounds,
       viewport: viewport,
       scale: this.coordinateSystem.scale,
+      zoom: this.coordinateSystem.zoomLevel,
       pan: this.coordinateSystem.panOffset,
       shapeCount: this.shapes.size,
       selectedShape: this.selectedShape ? this.findShapeName(this.selectedShape) : null,
@@ -754,6 +839,11 @@ export class Renderer {
       if (gridButton) {
         gridButton.remove();
       }
+
+      if (this.zoomControls?.container) {
+        this.zoomControls.container.remove();
+      }
+      this.zoomControls = null;
 
       this.shapes.clear();
       this.selectedShape = null;

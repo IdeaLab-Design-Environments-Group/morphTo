@@ -116,25 +116,36 @@ export class InteractionHandler {
   handleWheel(event) {
     event.preventDefault();
     
-    // Only handle panning with Ctrl+wheel (NO ZOOM)
-    if (event.ctrlKey) {
-      const panSensitivity = 2;
+    const rect = this.canvas.getBoundingClientRect();
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
+    
+    if (event.ctrlKey || event.metaKey) {
+      const zoomIntensity = 0.0015;
+      const factor = Math.exp(-event.deltaY * zoomIntensity);
+      const changed = this.coordinateSystem.zoomByFactor(factor, anchorX, anchorY);
       
-      if (event.deltaY !== 0) {
-        this.coordinateSystem.pan(0, -event.deltaY * panSensitivity);
-      }
-      
-      if (event.deltaX !== 0) {
-        this.coordinateSystem.pan(-event.deltaX * panSensitivity, 0);
-      }
-      
-      if (event.deltaX === 0 && event.shiftKey) {
-        this.coordinateSystem.pan(-event.deltaY * panSensitivity, 0);
+      if (changed && typeof this.renderer.updateZoomDisplay === 'function') {
+        this.renderer.updateZoomDisplay();
       }
       
       this.renderer.redraw();
+      return;
     }
-    // Regular wheel scrolling is ignored (no zoom)
+
+    const panSensitivity = 1;
+    let panX = -event.deltaX * panSensitivity;
+    let panY = -event.deltaY * panSensitivity;
+
+    if (event.shiftKey && panX === 0 && event.deltaY !== 0) {
+      panX = -event.deltaY * panSensitivity;
+      panY = 0;
+    }
+
+    if (panX !== 0 || panY !== 0) {
+      this.coordinateSystem.pan(panX, panY);
+      this.renderer.redraw();
+    }
   }
   
   handleKeyDown(event) {
@@ -247,9 +258,10 @@ export class InteractionHandler {
     
     const shapeX = this.coordinateSystem.transformX(shape.transform.position[0]);
     const shapeY = this.coordinateSystem.transformY(shape.transform.position[1]);
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
     
-    const dx = x - shapeX;
-    const dy = y - shapeY;
+    const dx = (x - shapeX) / scaleFactor;
+    const dy = (y - shapeY) / scaleFactor;
     
     const angle = shape.transform.rotation * Math.PI / 180;
     const rotatedX = dx * Math.cos(angle) + dy * Math.sin(angle);
@@ -271,6 +283,7 @@ export class InteractionHandler {
     const shape = this.selectedShape;
     const shapeX = this.coordinateSystem.transformX(shape.transform.position[0]);
     const shapeY = this.coordinateSystem.transformY(shape.transform.position[1]);
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
     
     const bounds = this.renderer.transformManager.calculateBounds(shape);
     const angle = -shape.transform.rotation * Math.PI / 180;
@@ -278,8 +291,8 @@ export class InteractionHandler {
     const cosA = Math.cos(angle);
 
     const localToScreen = (localX, localY) => ({
-      x: shapeX + (localX * cosA - localY * sinA),
-      y: shapeY + (localX * sinA + localY * cosA)
+      x: shapeX + (localX * cosA - localY * sinA) * scaleFactor,
+      y: shapeY + (localX * sinA + localY * cosA) * scaleFactor
     });
 
     const handlePositions = [
@@ -300,7 +313,8 @@ export class InteractionHandler {
     }
     
     const centerX = bounds.x + bounds.width / 2;
-    const rotHandlePos = localToScreen(centerX, bounds.y - this.rotationHandleDistance);
+    const handleOffsetWorld = this.rotationHandleDistance / scaleFactor;
+    const rotHandlePos = localToScreen(centerX, bounds.y - handleOffsetWorld);
     const rotDx = x - rotHandlePos.x;
     const rotDy = y - rotHandlePos.y;
     const rotDist = Math.sqrt(rotDx * rotDx + rotDy * rotDy);
@@ -401,12 +415,13 @@ export class InteractionHandler {
       return;
     }
     
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
     this.renderer.transformManager.handleParameterScaling(
       this.selectedShape, 
       this.activeHandle, 
       dx, 
       dy, 
-      1, // TRUE 1:1 scale
+      scaleFactor,
       shapeName,
       this.renderer.shapeManager
     );
@@ -424,8 +439,9 @@ export class InteractionHandler {
 
     if (width === 0 || height === 0) return;
 
-    const worldDX = dx;
-    const worldDY = -dy;
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
+    const worldDX = dx / scaleFactor;
+    const worldDY = -dy / scaleFactor;
     const rotation = (shape.transform?.rotation || 0) * Math.PI / 180;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
@@ -582,9 +598,9 @@ export class InteractionHandler {
     
     const shape = this.selectedShape;
     
-    // TRUE 1:1 scale - direct pixel to mm conversion
-    const worldDX = dx;  // No scaling needed - 1 pixel = 1 mm
-    const worldDY = -dy; // Just flip Y axis
+    const scaleFactor = this.coordinateSystem.getScaleFactor();
+    const worldDX = dx / scaleFactor;
+    const worldDY = -dy / scaleFactor;
     
     const oldX = shape.transform.position[0];
     const oldY = shape.transform.position[1];

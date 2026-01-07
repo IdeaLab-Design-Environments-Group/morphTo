@@ -206,7 +206,7 @@ export class DebugVisualizer {
     const coordInfo = [
       `Zoom: ${coordinateSystem.zoomLevel.toFixed(2)}x`,
       `Pan: ${coordinateSystem.panOffset.x.toFixed(1)}, ${coordinateSystem.panOffset.y.toFixed(1)}`,
-      `Scale: ${coordinateSystem.scale.toFixed(3)}`,
+      `Scale: ${coordinateSystem.getScaleFactor().toFixed(3)}`,
       `Grid: ${coordinateSystem.isGridEnabled ? 'ON' : 'OFF'}`,
       `Viewport: ${viewport.width.toFixed(0)} × ${viewport.height.toFixed(0)}`
     ];

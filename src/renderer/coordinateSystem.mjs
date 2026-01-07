@@ -5,8 +5,12 @@ export class CoordinateSystem {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     
-    // TRUE 1:1 scale - NO SCALING AT ALL
+    // TRUE 1:1 base scale - zoom multiplies this
     this.scale = 1;
+    this.zoomLevel = 1;
+    this.minZoom = 0.2;
+    this.maxZoom = 6;
+    this.zoomStep = 0.15;
     this.panOffset = { x: 0, y: 0 };
     this.offsetX = 0;
     this.offsetY = 0;
@@ -60,17 +64,25 @@ export class CoordinateSystem {
   
   // TRUE 1:1 transform methods - NO SCALING
   transformX(x) {
-    return x + this.offsetX + this.panOffset.x;
+    return x * this.getScaleFactor() + this.offsetX + this.panOffset.x;
   }
 
   transformY(y) {
-    return -y + this.offsetY + this.panOffset.y;
+    return -y * this.getScaleFactor() + this.offsetY + this.panOffset.y;
   }
   
   screenToWorld(x, y) {
+    const scale = this.getScaleFactor();
     return {
-      x: x - this.offsetX - this.panOffset.x,
-      y: -(y - this.offsetY - this.panOffset.y)
+      x: (x - this.offsetX - this.panOffset.x) / scale,
+      y: -(y - this.offsetY - this.panOffset.y) / scale
+    };
+  }
+  
+  worldToScreen(x, y) {
+    return {
+      x: this.transformX(x),
+      y: this.transformY(y)
     };
   }
   
@@ -120,6 +132,7 @@ export class CoordinateSystem {
     const ctx = this.ctx;
     const width = this.canvas.width;
     const centerX = this.offsetX + this.panOffset.x;
+    const scale = this.getScaleFactor();
     
     // Optimized ruler intervals - TRUE 1:1 (every pixel = 1mm)
     const majorTick = 50;  // Major ticks every 50mm
@@ -132,16 +145,18 @@ export class CoordinateSystem {
     // Calculate visible range efficiently
     const leftEdge = this.rulerWidth;
     const rightEdge = width;
-    const startMM = Math.floor((leftEdge - centerX) / majorTick) * majorTick;
-    const endMM = Math.ceil((rightEdge - centerX) / majorTick) * majorTick;
+    const visibleLeftWorld = (leftEdge - centerX) / scale;
+    const visibleRightWorld = (rightEdge - centerX) / scale;
+    const startMM = Math.floor(visibleLeftWorld / minorTick) * minorTick;
+    const endMM = Math.ceil(visibleRightWorld / minorTick) * minorTick;
     
     // Draw minor ticks (10mm) - optimized
     ctx.strokeStyle = '#c0c0c0';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     for (let mm = startMM; mm <= endMM; mm += minorTick) {
-      if (mm % majorTick === 0) continue; // Skip major tick positions
-      const x = centerX + mm;
+      if (mm % majorTick === 0) continue;
+      const x = centerX + mm * scale;
       if (x >= leftEdge && x <= rightEdge) {
         ctx.moveTo(x, this.rulerHeight - 4);
         ctx.lineTo(x, this.rulerHeight);
@@ -154,8 +169,8 @@ export class CoordinateSystem {
     ctx.lineWidth = 1;
     ctx.fillStyle = '#333333';
     
-    for (let mm = startMM; mm <= endMM; mm += majorTick) {
-      const x = centerX + mm;
+    for (let mm = Math.floor(visibleLeftWorld / majorTick) * majorTick; mm <= Math.ceil(visibleRightWorld / majorTick) * majorTick; mm += majorTick) {
+      const x = centerX + mm * scale;
       if (x >= leftEdge && x <= rightEdge) {
         // Draw major tick
         ctx.beginPath();
@@ -165,7 +180,7 @@ export class CoordinateSystem {
         
         // Draw label - simplified
         if (x > leftEdge + 20 && x < rightEdge - 20) {
-          const mmValue = Math.round(mm); // TRUE mm value
+          const mmValue = Math.round(mm);
           const displayValue = mmValue === 0 ? '0' : Math.abs(mmValue).toString();
           ctx.fillText(displayValue, x, 2);
           
@@ -196,6 +211,7 @@ export class CoordinateSystem {
     const ctx = this.ctx;
     const height = this.canvas.height;
     const centerY = this.offsetY + this.panOffset.y;
+    const scale = this.getScaleFactor();
     
     // Optimized ruler intervals - TRUE 1:1
     const majorTick = 50;  // Major ticks every 50mm
@@ -208,16 +224,18 @@ export class CoordinateSystem {
     // Calculate visible range efficiently
     const topEdge = this.rulerHeight;
     const bottomEdge = height;
-    const startMM = Math.floor((topEdge - centerY) / majorTick) * majorTick;
-    const endMM = Math.ceil((bottomEdge - centerY) / majorTick) * majorTick;
+    const visibleTopWorld = (topEdge - centerY) / scale;
+    const visibleBottomWorld = (bottomEdge - centerY) / scale;
+    const startMM = Math.floor(visibleTopWorld / minorTick) * minorTick;
+    const endMM = Math.ceil(visibleBottomWorld / minorTick) * minorTick;
     
     // Draw minor ticks (10mm) - optimized
     ctx.strokeStyle = '#c0c0c0';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     for (let mm = startMM; mm <= endMM; mm += minorTick) {
-      if (mm % majorTick === 0) continue; // Skip major tick positions
-      const y = centerY - mm; // Y axis is flipped
+      if (mm % majorTick === 0) continue;
+      const y = centerY - mm * scale;
       if (y >= topEdge && y <= bottomEdge) {
         ctx.moveTo(this.rulerWidth - 4, y);
         ctx.lineTo(this.rulerWidth, y);
@@ -230,8 +248,8 @@ export class CoordinateSystem {
     ctx.lineWidth = 1;
     ctx.fillStyle = '#333333';
     
-    for (let mm = startMM; mm <= endMM; mm += majorTick) {
-      const y = centerY - mm; // Y axis is flipped
+    for (let mm = Math.floor(visibleTopWorld / majorTick) * majorTick; mm <= Math.ceil(visibleBottomWorld / majorTick) * majorTick; mm += majorTick) {
+      const y = centerY - mm * scale;
       if (y >= topEdge && y <= bottomEdge) {
         // Draw major tick
         ctx.beginPath();
@@ -239,9 +257,8 @@ export class CoordinateSystem {
         ctx.lineTo(this.rulerWidth, y);
         ctx.stroke();
         
-        // Draw label - simplified
         if (y > topEdge + 20 && y < bottomEdge - 20) {
-          const mmValue = Math.round(mm); // TRUE mm value
+          const mmValue = Math.round(mm);
           const displayValue = mmValue === 0 ? '0' : Math.abs(mmValue).toString();
           
           ctx.save();
@@ -270,16 +287,17 @@ export class CoordinateSystem {
     const height = this.canvas.height;
     const centerX = this.offsetX + this.panOffset.x;
     const centerY = this.offsetY + this.panOffset.y;
+    const scale = this.getScaleFactor();
     
     const opacity = this.gridOpacity;
     
     // Calculate visible grid bounds for performance
     const startX = this.rulerWidth;
     const startY = this.rulerHeight;
-    const gridLeft = Math.floor((startX - centerX) / gridSize) * gridSize;
-    const gridRight = Math.ceil((width - centerX) / gridSize) * gridSize;
-    const gridTop = Math.floor((startY - centerY) / gridSize) * gridSize;
-    const gridBottom = Math.ceil((height - centerY) / gridSize) * gridSize;
+    const gridLeft = Math.floor(((startX - centerX) / scale) / gridSize) * gridSize;
+    const gridRight = Math.ceil(((width - centerX) / scale) / gridSize) * gridSize;
+    const gridTop = Math.floor(((startY - centerY) / scale) / gridSize) * gridSize;
+    const gridBottom = Math.ceil(((height - centerY) / scale) / gridSize) * gridSize;
     
     // Draw grid dots - optimized for performance
     this.ctx.fillStyle = `rgba(153, 153, 153, ${opacity})`;
@@ -287,8 +305,8 @@ export class CoordinateSystem {
     
     for (let offsetX = gridLeft; offsetX <= gridRight; offsetX += gridSize) {
       for (let offsetY = gridTop; offsetY <= gridBottom; offsetY += gridSize) {
-        const x = centerX + offsetX;
-        const y = centerY - offsetY; // Cartesian Y
+        const x = centerX + offsetX * scale;
+        const y = centerY - offsetY * scale;
         
         if (x >= startX && x <= width && y >= startY && y <= height) {
           this.ctx.moveTo(x + 1.2, y);
@@ -309,7 +327,7 @@ export class CoordinateSystem {
     const majorRight = Math.ceil(gridRight / majorGrid) * majorGrid;
     for (let offsetX = majorLeft; offsetX <= majorRight; offsetX += majorGrid) {
       if (offsetX === 0) continue; // Skip center line
-      const x = centerX + offsetX;
+      const x = centerX + offsetX * scale;
       if (x >= startX && x <= width) {
         this.ctx.moveTo(x, startY);
         this.ctx.lineTo(x, height);
@@ -321,7 +339,7 @@ export class CoordinateSystem {
     const majorBottom = Math.ceil(gridBottom / majorGrid) * majorGrid;
     for (let offsetY = majorTop; offsetY <= majorBottom; offsetY += majorGrid) {
       if (offsetY === 0) continue; // Skip center line
-      const y = centerY - offsetY;
+      const y = centerY - offsetY * scale;
       if (y >= startY && y <= height) {
         this.ctx.moveTo(startX, y);
         this.ctx.lineTo(width, y);
@@ -382,7 +400,7 @@ export class CoordinateSystem {
       centerY: this.offsetY,
       rulerHeight: this.rulerHeight,
       rulerWidth: this.rulerWidth,
-      scale: 1, // Always exactly 1
+      scale: this.getScaleFactor(),
       interactiveArea: {
         top: this.rulerHeight,
         left: this.rulerWidth,
@@ -433,6 +451,7 @@ export class CoordinateSystem {
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = clientX - rect.left;
     const canvasY = clientY - rect.top;
+    const scale = this.getScaleFactor();
     
     // Convert to world coordinates (TRUE 1:1)
     const worldPos = this.screenToWorld(canvasX, canvasY);
@@ -450,25 +469,58 @@ export class CoordinateSystem {
       world: worldPos,
       centerRelative: {
         pixels: { x: pixelFromCenterX, y: pixelFromCenterY },
-        mm: { x: pixelFromCenterX, y: pixelFromCenterY } // Direct 1:1
+        mm: { x: pixelFromCenterX / scale, y: pixelFromCenterY / scale }
       },
       ruler: {
-        displayX: Math.round(pixelFromCenterX),
-        displayY: Math.round(pixelFromCenterY)
+        displayX: Math.round(pixelFromCenterX / scale),
+        displayY: Math.round(pixelFromCenterY / scale)
       }
     };
   }
   
   // TRUE 1:1 utility methods
   pixelsToMillimeters(pixels) {
-    return pixels; // 1:1 conversion
+    return pixels / this.getScaleFactor();
   }
   
   millimetersToPixels(mm) {
-    return mm; // 1:1 conversion
+    return mm * this.getScaleFactor();
   }
   
   getScaleFactor() {
-    return 1; // Always 1:1
+    return this.scale * this.zoomLevel;
+  }
+
+  clampZoom(value) {
+    return Math.min(this.maxZoom, Math.max(this.minZoom, value));
+  }
+
+  setZoom(level, anchorX = this.canvas.width / 2, anchorY = this.canvas.height / 2) {
+    const targetZoom = this.clampZoom(level);
+    if (Math.abs(targetZoom - this.zoomLevel) < 0.0001) return false;
+
+    const anchorWorld = this.screenToWorld(anchorX, anchorY);
+    this.zoomLevel = targetZoom;
+
+    const newScreen = this.worldToScreen(anchorWorld.x, anchorWorld.y);
+    this.panOffset.x += anchorX - newScreen.x;
+    this.panOffset.y += anchorY - newScreen.y;
+    return true;
+  }
+
+  zoomByFactor(factor, anchorX = this.canvas.width / 2, anchorY = this.canvas.height / 2) {
+    return this.setZoom(this.zoomLevel * factor, anchorX, anchorY);
+  }
+
+  zoomIn(anchorX, anchorY) {
+    return this.zoomByFactor(1 + this.zoomStep, anchorX, anchorY);
+  }
+
+  zoomOut(anchorX, anchorY) {
+    return this.zoomByFactor(1 / (1 + this.zoomStep), anchorX, anchorY);
+  }
+
+  resetZoom(anchorX = this.canvas.width / 2, anchorY = this.canvas.height / 2) {
+    return this.setZoom(1, anchorX, anchorY);
   }
 }
