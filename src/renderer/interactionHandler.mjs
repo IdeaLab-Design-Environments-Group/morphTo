@@ -393,7 +393,14 @@ export class InteractionHandler {
     const shapeName = this.renderer.findShapeName(this.selectedShape);
     if (!shapeName) return;
     
-    // TRUE 1:1 scale - no scaling factors
+    const operandNames = this.selectedShape.params?.operands;
+    const isBoolean = !!this.selectedShape.params?.operation && Array.isArray(operandNames) && operandNames.length > 0;
+    
+    if (isBoolean) {
+      this.handleBooleanScaling(dx, dy, operandNames);
+      return;
+    }
+    
     this.renderer.transformManager.handleParameterScaling(
       this.selectedShape, 
       this.activeHandle, 
@@ -405,6 +412,104 @@ export class InteractionHandler {
     );
     
     this.renderer.notifyShapeChanged(this.selectedShape);
+  }
+
+  handleBooleanScaling(dx, dy, operandNames) {
+    if (!operandNames || operandNames.length === 0) return;
+
+    const shape = this.selectedShape;
+    const bounds = this.renderer.transformManager.calculateBounds(shape);
+    const width = Math.max(1, bounds.width);
+    const height = Math.max(1, bounds.height);
+
+    if (width === 0 || height === 0) return;
+
+    const worldDX = dx;
+    const worldDY = -dy;
+    const rotation = (shape.transform?.rotation || 0) * Math.PI / 180;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    const localDX = worldDX * cos + worldDY * sin;
+    const localDY = -worldDX * sin + worldDY * cos;
+
+    const handle = this.activeHandle || 'br';
+    const horizontalSign = (handle === 'tr' || handle === 'br') ? 1 : -1;
+    const verticalSign = (handle === 'tl' || handle === 'tr') ? 1 : -1;
+
+    const deltaWidth = localDX * horizontalSign * 2;
+    const deltaHeight = localDY * verticalSign * 2;
+
+    const newWidth = Math.max(5, width + deltaWidth);
+    const newHeight = Math.max(5, height + deltaHeight);
+
+    const scaleX = newWidth / width;
+    const scaleY = newHeight / height;
+
+    if (!isFinite(scaleX) || !isFinite(scaleY)) return;
+
+    this.scaleBooleanOperands(scaleX, scaleY, operandNames);
+  }
+
+  scaleBooleanOperands(scaleX, scaleY, operandNames) {
+    const shape = this.selectedShape;
+    const centerX = shape.transform?.position?.[0] || 0;
+    const centerY = shape.transform?.position?.[1] || 0;
+    const rotation = (shape.transform?.rotation || 0) * Math.PI / 180;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const minScale = 0.05;
+    const safeScaleX = Math.max(minScale, scaleX);
+    const safeScaleY = Math.max(minScale, scaleY);
+
+    for (const opName of operandNames) {
+      const opShape = this.renderer.shapes.get(opName);
+      if (!opShape) continue;
+
+      if (opShape.transform?.position) {
+        const relX = opShape.transform.position[0] - centerX;
+        const relY = opShape.transform.position[1] - centerY;
+
+        const localX = relX * cos + relY * sin;
+        const localY = -relX * sin + relY * cos;
+
+        const scaledLocalX = localX * safeScaleX;
+        const scaledLocalY = localY * safeScaleY;
+
+        const newRelX = scaledLocalX * cos - scaledLocalY * sin;
+        const newRelY = scaledLocalX * sin + scaledLocalY * cos;
+
+        opShape.transform.position = [centerX + newRelX, centerY + newRelY];
+      }
+
+      this.renderer.transformManager.scaleShapeParameters(opShape, safeScaleX, safeScaleY);
+
+      if (typeof this.renderer.updateCodeCallback === 'function') {
+        this.renderer.updateCodeCallback({ action: 'update', name: opName, shape: opShape });
+      }
+    }
+
+    if (Array.isArray(shape.params?.points)) {
+      shape.params.points = shape.params.points.map(point => {
+        if (point === null) return null;
+
+        if (Array.isArray(point)) {
+          return [point[0] * safeScaleX, point[1] * safeScaleY];
+        }
+
+        if (typeof point === 'object' && point !== null) {
+          return {
+            x: (point.x || 0) * safeScaleX,
+            y: (point.y || 0) * safeScaleY
+          };
+        }
+
+        return point;
+      });
+    }
+
+    this._booleanDragInProgress = true;
+    this.renderer.redraw();
   }
   
   handleRotation(x, y) {

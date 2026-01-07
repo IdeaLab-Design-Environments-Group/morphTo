@@ -322,6 +322,135 @@ export class TransformManager {
     }
   }
 
+  scaleShapeParameters(shape, scaleX, scaleY) {
+    if (!shape?.params) return;
+    const params = shape.params;
+    const uniformScale = Math.max(0.05, (Math.abs(scaleX) + Math.abs(scaleY)) / 2);
+
+    const applyScale = (value, factor, min = 0) => {
+      const scaled = value * factor;
+      if (Number.isNaN(scaled)) return value;
+      return Math.max(min, scaled);
+    };
+
+    switch (shape.type) {
+      case 'circle':
+      case 'polygon':
+      case 'arc':
+        if (typeof params.radius === 'number') {
+          params.radius = applyScale(params.radius, uniformScale, 1);
+        }
+        break;
+      case 'donut':
+        if (typeof params.outerRadius === 'number') {
+          const newOuter = applyScale(params.outerRadius, uniformScale, 2);
+          params.outerRadius = newOuter;
+          if (typeof params.innerRadius === 'number') {
+            params.innerRadius = Math.max(1, Math.min(newOuter - 2, applyScale(params.innerRadius, uniformScale, 1)));
+          }
+        }
+        break;
+      case 'spiral':
+        if (typeof params.startRadius === 'number') {
+          params.startRadius = applyScale(params.startRadius, uniformScale, 1);
+        }
+        if (typeof params.endRadius === 'number') {
+          params.endRadius = applyScale(params.endRadius, uniformScale, 2);
+        }
+        break;
+      case 'star':
+        if (typeof params.outerRadius === 'number') {
+          params.outerRadius = applyScale(params.outerRadius, uniformScale, 2);
+        }
+        if (typeof params.innerRadius === 'number') {
+          params.innerRadius = applyScale(params.innerRadius, uniformScale, 1);
+        }
+        break;
+      case 'gear':
+        if (typeof params.diameter === 'number') {
+          params.diameter = applyScale(params.diameter, uniformScale, 5);
+        }
+        break;
+      case 'rectangle':
+      case 'roundedRectangle':
+      case 'chamferRectangle':
+        if (typeof params.width === 'number') {
+          params.width = applyScale(params.width, scaleX, 5);
+        }
+        if (typeof params.height === 'number') {
+          params.height = applyScale(params.height, scaleY, 5);
+        }
+        if (shape.type === 'roundedRectangle' && typeof params.radius === 'number') {
+          params.radius = applyScale(params.radius, uniformScale, 0);
+        }
+        if (shape.type === 'chamferRectangle' && typeof params.chamfer === 'number') {
+          params.chamfer = applyScale(params.chamfer, uniformScale, 0);
+        }
+        break;
+      case 'triangle':
+        if (typeof params.base === 'number') {
+          params.base = applyScale(params.base, scaleX, 5);
+        }
+        if (typeof params.height === 'number') {
+          params.height = applyScale(params.height, scaleY, 5);
+        }
+        break;
+      case 'ellipse':
+        if (typeof params.radiusX === 'number') {
+          params.radiusX = applyScale(params.radiusX, Math.abs(scaleX), 2);
+        }
+        if (typeof params.radiusY === 'number') {
+          params.radiusY = applyScale(params.radiusY, Math.abs(scaleY), 2);
+        }
+        break;
+      case 'slot':
+        if (typeof params.length === 'number') {
+          params.length = applyScale(params.length, scaleX, 5);
+        }
+        if (typeof params.width === 'number') {
+          params.width = applyScale(params.width, scaleY, 2);
+        }
+        break;
+      case 'cross':
+        if (typeof params.width === 'number') {
+          params.width = applyScale(params.width, scaleX, 5);
+        }
+        if (typeof params.thickness === 'number') {
+          params.thickness = applyScale(params.thickness, scaleY, 2);
+        }
+        break;
+      case 'arrow':
+        if (typeof params.length === 'number') {
+          params.length = applyScale(params.length, scaleX, 10);
+        }
+        if (typeof params.headWidth === 'number') {
+          params.headWidth = applyScale(params.headWidth, scaleY, 2);
+        }
+        if (typeof params.headLength === 'number') {
+          params.headLength = applyScale(params.headLength, scaleX, 2);
+        }
+        if (typeof params.bodyWidth === 'number') {
+          params.bodyWidth = applyScale(params.bodyWidth, scaleY, 1);
+        }
+        break;
+      case 'text':
+        if (typeof params.fontSize === 'number') {
+          params.fontSize = applyScale(params.fontSize, uniformScale, 4);
+        }
+        break;
+      case 'wave':
+        if (typeof params.width === 'number') {
+          params.width = applyScale(params.width, scaleX, 5);
+        }
+        if (typeof params.amplitude === 'number') {
+          params.amplitude = applyScale(params.amplitude, Math.abs(scaleY), 1);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
   applyTransform(transform, point) {
     const { position = [0, 0], rotation = 0, scale = [1, 1] } = transform;
     
