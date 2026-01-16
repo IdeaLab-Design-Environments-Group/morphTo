@@ -1,143 +1,195 @@
 // =====================================================
 // CRAB — BODY + 2 SEPARATE HANDS (NO DUPLICATES)
-// Tabs on hands, slots on body
-// Hands are OFFSET outward for layout/printing
+// SG90 SERVO CONNECTION (NO TABS/SLOTS)
+// SCALE: DOWN 2.5x  (coeff = 1/2.5)
+//
+// UPDATE:
+// - SG90 horn screw holes on BOTH arms (SATSUMA-style formula)
+// - Holes are SUBTRACTED from the arm rectangles (integrated into the arm)
 // =====================================================
+
+
+// -------------------- GLOBAL SCALE --------------------
+param coeff (1/2.5)
+
 
 // -------------------- STYLE --------------------
 param fillCol #000000
 param op      200
 
+
+// -------------------- MATERIAL + FIT (SG90) --------------------
+param materialThickness0 3
+param kerf0 0.20
+param clearance0 0.15
+
+param materialThickness (materialThickness0 * coeff)
+param kerf (kerf0 * coeff)
+param clearance (clearance0 * coeff)
+
+
+// SG90 body: 22.5 (long) x 11.5 (short)
+param servoW0 (11.5 + kerf0 + clearance0)
+param servoH0 (22.5 + kerf0 + clearance0)
+
+param servoW (servoW0 * coeff)
+param servoH (servoH0 * coeff)
+
+
+// horn screw hole (from satsuma)
+param hornHoleR0 2.3
+param hornInset0 18
+param hornHoleR (hornHoleR0 * coeff)
+param hornInset (hornInset0 * coeff)
+
+
+// cutout rotation so long axis is horizontal (NOT scaled)
+param servoRot 90
+
+
+
 // -------------------- BODY (OVAL) --------------------
-param bodyRX 120
-param bodyRY 70
+param bodyRX0 120
+param bodyRY0 70
+
+param bodyRX (bodyRX0 * coeff)
+param bodyRY (bodyRY0 * coeff)
 
 shape ellipse crab_body {
   position: [0, 0]
   radiusX: bodyRX
   radiusY: bodyRY
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
+
 // -------------------- EYES --------------------
-param eyeR 10
-param eyeX 40
-param eyeY 73
+param eyeR0 10
+param eyeX0 40
+param eyeY0 73
+
+param eyeR (eyeR0 * coeff)
+param eyeX (eyeX0 * coeff)
+param eyeY (eyeY0 * coeff)
 
 shape circle crab_eyeL {
   position: [-eyeX, eyeY]
   radius: eyeR
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
 shape circle crab_eyeR {
   position: [eyeX, eyeY]
   radius: eyeR
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
-// -------------------- HAND/CLAW PARAMS (used by pieces) --------------------
-param armW 70
-param armH 24
-param armR 12
-param armOffX 125
-param armOffY 28
-param armRot 18
 
-param clawPalmW 78
-param clawPalmH 70
-param clawPalmR 22
 
-param clawTipBase 46
-param clawTipH    46
+// -------------------- HAND/CLAW PARAMS --------------------
+param rotp 45
 
-param clawX 180
-param clawY 60
+param armW0 70
+param armH0 24
+param armR0 12
+param armOffX0 125
+param armOffY0 28
+param armRot 18   // angle (NOT scaled)
 
-// -------------------- LEGS (unchanged; stay on body piece) --------------------
-param legSegW 62
-param legSegH 14
-param legR    7
+param armW (armW0 * coeff)
+param armH (armH0 * coeff)
+param armR (armR0 * coeff)
+param armOffX (armOffX0 * coeff)
+param armOffY (armOffY0 * coeff)
 
-param legY1 -55
-param legY2 -72
-param legY3 -86
+param clawPalmW0 48
+param clawPalmH0 75
+param clawPalmW (clawPalmW0 * coeff)
+param clawPalmH (clawPalmH0 * coeff)
 
-param legX1 90
-param legX2 55
-param legX3 20
+param clawTipBase0 46
+param clawTipH0    46
+param clawTipBase (clawTipBase0 * coeff)
+param clawTipH    (clawTipH0 * coeff)
 
-shape roundedRectangle L1_a { position: [-legX1 - 10, legY1 - 35] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle L1_b { position: [-legX1 - 25, legY1 + 18] width: legSegW height: legSegH radius: legR rotation: 46 fill:true fillColor:fillCol opacity:op }
+param clawX0 180
+param clawY0 60
+param clawX (clawX0 * coeff)
+param clawY (clawY0 * coeff)
 
-shape roundedRectangle L2_a { position: [-legX2 - 10, legY2 - 35] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle L2_b { position: [-legX2 - 22, legY2 + 20] width: legSegW height: legSegH radius: legR rotation: 33 fill:true fillColor:fillCol opacity:op }
 
-shape roundedRectangle L3_a { position: [-legX3 -116, legY3 + 5] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle L3_b { position: [-legX3 - 18, legY3 + 18] width: legSegW height: legSegH radius: legR rotation: 20 fill:true fillColor:fillCol opacity:op }
 
-shape roundedRectangle R1_a { position: [legX1 + 10, legY1 - 35] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle R1_b { position: [legX1 + 25, legY1 + 18] width: legSegW height: legSegH radius: legR rotation: -46 fill:true fillColor:fillCol opacity:op }
+// -------------------- LEGS (on body piece) --------------------
+param legSegW0 62
+param legSegH0 14
+param legR0    7
 
-shape roundedRectangle R2_a { position: [legX2 + 10, legY2 - 35] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle R2_b { position: [legX2 + 22, legY2 + 18] width: legSegW height: legSegH radius: legR rotation: -33 fill:true fillColor:fillCol opacity:op }
+param legSegW (legSegW0 * coeff)
+param legSegH (legSegH0 * coeff)
+param legR    (legR0 * coeff)
 
-shape roundedRectangle R3_a { position: [legX3 + 116, legY3 + 5] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
-shape roundedRectangle R3_b { position: [legX3 + 18, legY3 + 18] width: legSegW height: legSegH radius: legR rotation: -20 fill:true fillColor:fillCol opacity:op }
+param legY1 (-55 * coeff)
+param legY2 (-72 * coeff)
+param legY3 (-86 * coeff)
 
-// =====================================================
-// JOINTS (tabs on hands, slots on body)
-// =====================================================
-param tabW 14
-param tabH 26
-param tabR  3
+param legX1 (90 * coeff)
+param legX2 (55 * coeff)
+param legX3 (20 * coeff)
 
-param clr  1.0
-param slotW (tabW + 2*clr)
-param slotH (tabH + 2*clr)
-param slotR (tabR + 1)
+shape roundedRectangle L1_a { position: [-legX1 - 10*coeff, legY1 - 35*coeff] width: legSegW height: legSegH radius: legR rotation: 80  fill:false opacity:op }
+shape roundedRectangle L1_b { position: [-legX1 - 25*coeff, legY1 + 18*coeff] width: legSegW height: legSegH radius: legR rotation: 46  fill:false opacity:op }
 
-// slot centers on the body (where hands would attach)
+shape roundedRectangle L2_a { position: [-legX2 - 10*coeff, legY2 - 35*coeff] width: legSegW height: legSegH radius: legR rotation: 80  fill:false opacity:op }
+shape roundedRectangle L2_b { position: [-legX2 - 22*coeff, legY2 + 20*coeff] width: legSegW height: legSegH radius: legR rotation: 33  fill:false opacity:op }
+
+shape roundedRectangle L3_a { position: [-legX3 -116*coeff, legY3 + 5*coeff] width: legSegW height: legSegH radius: legR rotation: 80  fill:false opacity:op }
+shape roundedRectangle L3_b { position: [-legX3 - 18*coeff, legY3 + 18*coeff] width: legSegW height: legSegH radius: legR rotation: 20  fill:false opacity:op }
+
+shape roundedRectangle R1_a { position: [legX1 + 10*coeff, legY1 - 35*coeff]  width: legSegW height: legSegH radius: legR rotation: -80 fill:false opacity:op }
+shape roundedRectangle R1_b { position: [legX1 + 25*coeff, legY1 + 18*coeff]  width: legSegW height: legSegH radius: legR rotation: -46 fill:false opacity:op }
+
+shape roundedRectangle R2_a { position: [legX2 + 10*coeff, legY2 - 35*coeff]  width: legSegW height: legSegH radius: legR rotation: -80 fill:false opacity:op }
+shape roundedRectangle R2_b { position: [legX2 + 22*coeff, legY2 + 18*coeff]  width: legSegW height: legSegH radius: legR rotation: -33 fill:false opacity:op }
+
+shape roundedRectangle R3_a { position: [legX3 + 116*coeff, legY3 + 5*coeff]  width: legSegW height: legSegH radius: legR rotation: -80 fill:false opacity:op }
+shape roundedRectangle R3_b { position: [legX3 + 18*coeff,  legY3 + 18*coeff] width: legSegW height: legSegH radius: legR rotation: -20 fill:false opacity:op }
+
+
+
+// -------------------- SERVO CUTOUT LOCATIONS ON BODY --------------------
 param handAttachY armOffY
-param handSlotInset 8
+param handSlotInset (8 * coeff)
 param handSlotLX -(bodyRX - handSlotInset)
 param handSlotRX  (bodyRX - handSlotInset)
 
-// layout offsets for separated hand pieces (ONLY affects the separate pieces)
-param handSepX 110
-param handSepY 0
-
-// -------------------- BODY SLOTS (female cutouts) --------------------
-shape roundedRectangle slot_handL {
-  position: [handSlotLX, handAttachY]
-  width: slotW
-  height: slotH
-  radius: slotR
-  rotation: 0
-  fill: true
-  fillColor: fillCol
+// NOTE: you currently hardcoded +/-15. keep it if you like.
+shape roundedRectangle servo_cut_L {
+  position: [handSlotLX + 15, handAttachY]
+  width: servoW
+  height: servoH
+  radius: -20
+  rotation: servoRot
+  fill: false
   opacity: op
 }
 
-shape roundedRectangle slot_handR {
-  position: [handSlotRX, handAttachY]
-  width: slotW
-  height: slotH
-  radius: slotR
-  rotation: 0
-  fill: true
-  fillColor: fillCol
+shape roundedRectangle servo_cut_R {
+  position: [handSlotRX - 15, handAttachY]
+  width: servoW
+  height: servoH
+  radius: -20
+  rotation: -servoRot
+  fill: false
   opacity: op
 }
+
+
 
 // =====================================================
-// BODY UNION (NO HANDS INCLUDED HERE)
+// BODY UNION (NO HANDS)
 // =====================================================
 union crabb {
   add crab_body
@@ -159,119 +211,155 @@ union crabb {
   add R3_b
 }
 
+
 // =====================================================
-// BODY PIECE (slots are SUBTRACTED)
+// BODY PIECE (SERVO CUTOUTS SUBTRACTED)
 // =====================================================
 difference crab_body_piece {
   add crabb
-  add slot_handL
-  add slot_handR
+  add servo_cut_L
+  add servo_cut_R
 }
 
-// =====================================================
-// SEPARATE HAND PIECES ONLY (these do not exist anywhere else)
-// =====================================================
 
-// -------------------- LEFT HAND (offset piece) --------------------
+
+// =====================================================
+// SEPARATE HAND PIECES (OFFSET FOR PRINTING)
+// =====================================================
+param handSepX (110 * coeff)
+param handSepY (0 * coeff)
+
+// vertical tweak you had
+param armYshift (-25)
+
+
+// -------------------- LEFT ARM (rectangle) --------------------
 shape roundedRectangle crab_armL_piece {
-  position: [-armOffX - handSepX, armOffY - handSepY]
+  position: [-armOffX - handSepX, -(armOffY + handSepY + armYshift)]
   width: armW
   height: armH
   radius: armR
   rotation: -armRot
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
-shape roundedRectangle clawL_palm_piece {
-  position: [-clawX - handSepX, clawY + handSepY]
-  width: clawPalmW
-  height: clawPalmH
-  radius: clawPalmR
-  rotation: -25
-  fill: true
-  fillColor: fillCol
+
+
+// -------------------- LEFT CLAW --------------------
+shape ellipse clawL_palm_piece {
+  position: [-clawX - handSepX + 2*coeff, clawY + handSepY + 4*coeff]
+  radiusX: (clawPalmW/1.7)
+  radiusY: (clawPalmH/1.7)
+  rotation: rotp
+  fill: false
   opacity: op
 }
 
 shape triangle clawL_tip1_piece {
-  position: [-clawX - 25 - handSepX, clawY + 48 + handSepY]
+  position: [-clawX - 25*coeff - handSepX, clawY + 48*coeff + handSepY]
   base: clawTipBase
   height: clawTipH
   rotation: 26
-  fill: true
-  fillColor: fillCol
-  opacity: op
-}
-
-// tab for left hand (also offset with the piece)
-shape roundedRectangle tab_handL_piece {
-  position: [handSlotLX + (tabW/2 + clr) - handSepX/1.1, (handAttachY + handSepY)/2]
-  width: tabW
-  height: tabH
-  radius: tabR
-  rotation: 0
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
 union hand_L_piece {
-  add crab_armL_piece
   add clawL_palm_piece
   add clawL_tip1_piece
-  add tab_handL_piece
+  add crab_armL_piece
 }
 
-// -------------------- RIGHT HAND (offset piece) --------------------
+
+
+// -------------------- RIGHT ARM (rectangle) --------------------
 shape roundedRectangle crab_armR_piece {
-  position: [armOffX + handSepX, armOffY + handSepY]
+  position: [94, 13.799999999999999]
   width: armW
   height: armH
   radius: armR
-  rotation: armRot
-  fill: true
-  fillColor: fillCol
+  rotation: 18
+  fill: false
   opacity: op
 }
 
-shape roundedRectangle clawR_palm_piece {
-  position: [clawX + handSepX, clawY + handSepY]
-  width: clawPalmW
-  height: clawPalmH
-  radius: clawPalmR
-  rotation: 25
-  fill: true
-  fillColor: fillCol
+
+// -------------------- RIGHT CLAW --------------------
+shape ellipse clawR_palm_piece {
+  position: [clawX + handSepX - 2*coeff, clawY + handSepY + 5*coeff]
+  radiusX: (clawPalmW/1.7)
+  radiusY: (clawPalmH/1.7)
+  rotation: -46
+  fill: false
   opacity: op
 }
 
 shape triangle clawR_tip1_piece {
-  position: [clawX + 25 + handSepX, clawY + 48 + handSepY]
+  position: [clawX + 25*coeff + handSepX, clawY + 48*coeff + handSepY]
   base: clawTipBase
   height: clawTipH
   rotation: -26
-  fill: true
-  fillColor: fillCol
-  opacity: op
-}
-
-// tab for right hand (also offset with the piece)
-shape roundedRectangle tab_handR_piece {
-  position: [handSlotRX/1.3 + (tabW/2 + clr) + handSepX, (handAttachY + handSepY)/2]
-  width: tabW
-  height: tabH
-  radius: tabR
-  rotation: 0
-  fill: true
-  fillColor: fillCol
+  fill: false
   opacity: op
 }
 
 union hand_R_piece {
-  add crab_armR_piece
   add clawR_palm_piece
   add clawR_tip1_piece
-  add tab_handR_piece
+  add crab_armR_piece
+}
+
+
+
+// =====================================================
+// OPTIONAL: ELLIPSE CUT DETAIL (scaled)
+// (kept exactly as you had it, but now cuts the new hands too)
+// =====================================================
+shape ellipse ellipse1 {
+  rotation: 125.22410883404055
+  position: [-133.1320645931418, 45.75962647996094]
+  radiusX: (24.367760562158722 * 1.08 * coeff)
+  radiusY: (6.3732763243235055 * 1.08 * coeff)
+  fill: false
+}
+
+shape ellipse ellipse2 {
+  rotation: -125.22410883404055
+  position: [120.0358302845421, 43.92768273705547]
+  radiusX: (24.367760562158722 * 1.08 * coeff)
+  radiusY: (6.3732763243235055 * 1.08 * coeff)
+  fill: false
+}
+
+difference a {
+  add hand_L_piece
+  add ellipse1
+}
+
+difference b {
+  add hand_R_piece
+  add ellipse2
+}
+
+shape circle circle2 {
+    position: [87, 11.5]
+    radius: 2.3
+    fill: false
+}
+
+shape circle circle3 {
+    position: [-87, 11.5]
+    radius: 2.3
+    fill: false
+}
+
+difference c {
+  add a
+  add circle3
+}
+
+difference d {
+  add b
+  add circle2
 }
