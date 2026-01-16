@@ -6,6 +6,26 @@
 document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     const examples = {
+      'satsuma': {
+        image: './Images/satsuma.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/satsuma.txt'
+      },
+      'crab': {
+        image: './Images/crab.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/crab.txt'
+      },
+      'swordfish': {
+        image: './Images/swordfish.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/swordfish.txt'
+      },
+      'starfish': {
+        image: './Images/starfish.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/starfish.txt'
+      },
+      'seafish': {
+        image: './Images/seafish.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/seafish.txt'
+      },
       'finger-joint-box': {
         image: './Images/finger-joint-box.png',
         file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/finger-joint-box.txt'
@@ -41,22 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
       'fish': {
         image: './Images/fish.png',
         file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/fish.txt'
-      }, 
-      'satsuma': {
-        image: './Images/satsuma.png',
-        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/satsuma.txt'
-      },
-      'crab': {
-        image: './Images/crab.png',
-        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/crab.txt'
-      },
-      'swordfish': {
-        image: './Images/swordfish.png',
-        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/swordfish.txt'
-      },
-      'seafish': {
-        image: './Images/seafish.png',
-        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/seafish.txt'
       }
     };
 
