@@ -1,0 +1,63 @@
+//Otto by the IdeaLab Fablab
+
+
+shape star star1 {
+    rotation: 30
+    position: [0, 0]
+    outerRadius: 76
+    innerRadius: 38
+  	rotation: 18
+    points: 5
+    fill: false
+}
+
+
+// -------------------- LED PARAMS --------------------
+param ledR 2.0
+
+// distances along arm
+param d1 25
+param d2 40
+param d3 55
+
+shape circle led_center {
+  position: [0, 0]
+  radius: ledR
+  fill: false
+}
+
+shape circle led_1a { position: [  0, 25 ] radius: ledR fill:false }
+shape circle led_1b { position: [  0, 40 ] radius: ledR fill:false }
+shape circle led_1c { position: [  0, 55 ] radius: ledR fill:false }
+shape circle led_2a { position: [ 25,  8 ] radius: ledR fill:false }
+shape circle led_2b { position: [ 40, 13 ] radius: ledR fill:false }
+shape circle led_2c { position: [ 55, 18 ] radius: ledR fill:false }
+shape circle led_3a { position: [ 15, -21 ] radius: ledR fill:false }
+shape circle led_3b { position: [ 24, -34 ] radius: ledR fill:false }
+shape circle led_3c { position: [ 33, -48 ] radius: ledR fill:false }
+shape circle led_4a { position: [ -15, -21 ] radius: ledR fill:false }
+shape circle led_4b { position: [ -24, -34 ] radius: ledR fill:false }
+shape circle led_4c { position: [ -33, -48 ] radius: ledR fill:false }
+shape circle led_5a { position: [ -25,  8 ] radius: ledR fill:false }
+shape circle led_5b { position: [ -40, 13 ] radius: ledR fill:false }
+shape circle led_5c { position: [ -55, 18 ] radius: ledR fill:false }
+
+difference a {
+  add star1
+  add led_center
+  add led_1a
+  add led_1b
+  add led_1c
+  add led_2a
+  add led_2b
+  add led_2c
+  add led_3a
+  add led_3b
+  add led_3c
+  add led_4a
+  add led_4b
+  add led_4c
+  add led_5a
+  add led_5b
+  add led_5c
+}
