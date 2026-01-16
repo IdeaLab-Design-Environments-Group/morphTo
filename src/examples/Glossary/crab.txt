@@ -1,0 +1,277 @@
+// =====================================================
+// CRAB — BODY + 2 SEPARATE HANDS (NO DUPLICATES)
+// Tabs on hands, slots on body
+// Hands are OFFSET outward for layout/printing
+// =====================================================
+
+// -------------------- STYLE --------------------
+param fillCol #000000
+param op      200
+
+// -------------------- BODY (OVAL) --------------------
+param bodyRX 120
+param bodyRY 70
+
+shape ellipse crab_body {
+  position: [0, 0]
+  radiusX: bodyRX
+  radiusY: bodyRY
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+// -------------------- EYES --------------------
+param eyeR 10
+param eyeX 40
+param eyeY 73
+
+shape circle crab_eyeL {
+  position: [-eyeX, eyeY]
+  radius: eyeR
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape circle crab_eyeR {
+  position: [eyeX, eyeY]
+  radius: eyeR
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+// -------------------- HAND/CLAW PARAMS (used by pieces) --------------------
+param armW 70
+param armH 24
+param armR 12
+param armOffX 125
+param armOffY 28
+param armRot 18
+
+param clawPalmW 78
+param clawPalmH 70
+param clawPalmR 22
+
+param clawTipBase 46
+param clawTipH    46
+
+param clawX 180
+param clawY 60
+
+// -------------------- LEGS (unchanged; stay on body piece) --------------------
+param legSegW 62
+param legSegH 14
+param legR    7
+
+param legY1 -55
+param legY2 -72
+param legY3 -86
+
+param legX1 90
+param legX2 55
+param legX3 20
+
+shape roundedRectangle L1_a { position: [-legX1 - 10, legY1 - 35] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle L1_b { position: [-legX1 - 25, legY1 + 18] width: legSegW height: legSegH radius: legR rotation: 46 fill:true fillColor:fillCol opacity:op }
+
+shape roundedRectangle L2_a { position: [-legX2 - 10, legY2 - 35] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle L2_b { position: [-legX2 - 22, legY2 + 20] width: legSegW height: legSegH radius: legR rotation: 33 fill:true fillColor:fillCol opacity:op }
+
+shape roundedRectangle L3_a { position: [-legX3 -116, legY3 + 5] width: legSegW height: legSegH radius: legR rotation: 80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle L3_b { position: [-legX3 - 18, legY3 + 18] width: legSegW height: legSegH radius: legR rotation: 20 fill:true fillColor:fillCol opacity:op }
+
+shape roundedRectangle R1_a { position: [legX1 + 10, legY1 - 35] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle R1_b { position: [legX1 + 25, legY1 + 18] width: legSegW height: legSegH radius: legR rotation: -46 fill:true fillColor:fillCol opacity:op }
+
+shape roundedRectangle R2_a { position: [legX2 + 10, legY2 - 35] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle R2_b { position: [legX2 + 22, legY2 + 18] width: legSegW height: legSegH radius: legR rotation: -33 fill:true fillColor:fillCol opacity:op }
+
+shape roundedRectangle R3_a { position: [legX3 + 116, legY3 + 5] width: legSegW height: legSegH radius: legR rotation: -80 fill:true fillColor:fillCol opacity:op }
+shape roundedRectangle R3_b { position: [legX3 + 18, legY3 + 18] width: legSegW height: legSegH radius: legR rotation: -20 fill:true fillColor:fillCol opacity:op }
+
+// =====================================================
+// JOINTS (tabs on hands, slots on body)
+// =====================================================
+param tabW 14
+param tabH 26
+param tabR  3
+
+param clr  1.0
+param slotW (tabW + 2*clr)
+param slotH (tabH + 2*clr)
+param slotR (tabR + 1)
+
+// slot centers on the body (where hands would attach)
+param handAttachY armOffY
+param handSlotInset 8
+param handSlotLX -(bodyRX - handSlotInset)
+param handSlotRX  (bodyRX - handSlotInset)
+
+// layout offsets for separated hand pieces (ONLY affects the separate pieces)
+param handSepX 110
+param handSepY 0
+
+// -------------------- BODY SLOTS (female cutouts) --------------------
+shape roundedRectangle slot_handL {
+  position: [handSlotLX, handAttachY]
+  width: slotW
+  height: slotH
+  radius: slotR
+  rotation: 0
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape roundedRectangle slot_handR {
+  position: [handSlotRX, handAttachY]
+  width: slotW
+  height: slotH
+  radius: slotR
+  rotation: 0
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+// =====================================================
+// BODY UNION (NO HANDS INCLUDED HERE)
+// =====================================================
+union crabb {
+  add crab_body
+  add crab_eyeL
+  add crab_eyeR
+
+  add L1_a
+  add L1_b
+  add L2_a
+  add L2_b
+  add L3_a
+  add L3_b
+
+  add R1_a
+  add R1_b
+  add R2_a
+  add R2_b
+  add R3_a
+  add R3_b
+}
+
+// =====================================================
+// BODY PIECE (slots are SUBTRACTED)
+// =====================================================
+difference crab_body_piece {
+  add crabb
+  add slot_handL
+  add slot_handR
+}
+
+// =====================================================
+// SEPARATE HAND PIECES ONLY (these do not exist anywhere else)
+// =====================================================
+
+// -------------------- LEFT HAND (offset piece) --------------------
+shape roundedRectangle crab_armL_piece {
+  position: [-armOffX - handSepX, armOffY - handSepY]
+  width: armW
+  height: armH
+  radius: armR
+  rotation: -armRot
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape roundedRectangle clawL_palm_piece {
+  position: [-clawX - handSepX, clawY + handSepY]
+  width: clawPalmW
+  height: clawPalmH
+  radius: clawPalmR
+  rotation: -25
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape triangle clawL_tip1_piece {
+  position: [-clawX - 25 - handSepX, clawY + 48 + handSepY]
+  base: clawTipBase
+  height: clawTipH
+  rotation: 26
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+// tab for left hand (also offset with the piece)
+shape roundedRectangle tab_handL_piece {
+  position: [handSlotLX + (tabW/2 + clr) - handSepX/1.1, (handAttachY + handSepY)/2]
+  width: tabW
+  height: tabH
+  radius: tabR
+  rotation: 0
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+union hand_L_piece {
+  add crab_armL_piece
+  add clawL_palm_piece
+  add clawL_tip1_piece
+  add tab_handL_piece
+}
+
+// -------------------- RIGHT HAND (offset piece) --------------------
+shape roundedRectangle crab_armR_piece {
+  position: [armOffX + handSepX, armOffY + handSepY]
+  width: armW
+  height: armH
+  radius: armR
+  rotation: armRot
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape roundedRectangle clawR_palm_piece {
+  position: [clawX + handSepX, clawY + handSepY]
+  width: clawPalmW
+  height: clawPalmH
+  radius: clawPalmR
+  rotation: 25
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+shape triangle clawR_tip1_piece {
+  position: [clawX + 25 + handSepX, clawY + 48 + handSepY]
+  base: clawTipBase
+  height: clawTipH
+  rotation: -26
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+// tab for right hand (also offset with the piece)
+shape roundedRectangle tab_handR_piece {
+  position: [handSlotRX/1.3 + (tabW/2 + clr) + handSepX, (handAttachY + handSepY)/2]
+  width: tabW
+  height: tabH
+  radius: tabR
+  rotation: 0
+  fill: true
+  fillColor: fillCol
+  opacity: op
+}
+
+union hand_R_piece {
+  add crab_armR_piece
+  add clawR_palm_piece
+  add clawR_tip1_piece
+  add tab_handR_piece
+}
