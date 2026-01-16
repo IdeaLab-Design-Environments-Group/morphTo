@@ -8,39 +8,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const examples = {
       'finger-joint-box': {
         image: './Images/finger-joint-box.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/finger-joint-box.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/finger-joint-box.txt'
       },
       'puzzle-tiles-grid': {
         image: './Images/puzzle-tiles-grid.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/puzzle_tiles_grid.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/puzzle_tiles_grid.txt'
       },
       'mini-desk-organizer': {
         image: './Images/mini-desk-organizer.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/mini_desk_organizer.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/mini_desk_organizer.txt'
       },
       'ruler': {
         image: './Images/ruler.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/ruler.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/ruler.txt'
       },
       'cnc-safety-checklist': {
         image: './Images/cnc-safety-checklist.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/cnc_safety.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/cnc_safety.txt'
       },
       'shelf-system': {
         image: './Images/shelf-system.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/shelf_system.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/shelf_system.txt'
       },
       'chair': {
         image: './Images/chair.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/chair.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/chair.txt'
       },
       'parametric-construction-kit': {
         image: './Images/parametric-construction-kit.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/parametric_construction_kit.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/parametric_construction_kit.txt'
       },
       'fish': {
         image: './Images/fish.png',
-        file: 'https://raw.githubusercontent.com/HisarCS/Otto/main/src/examples/Glossary/fish.txt'
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/fish.txt'
+      }, 
+      'satsuma': {
+        image: './Images/satsuma.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/satsuma.txt'
+      },
+      'crab': {
+        image: './Images/crab.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/crab.txt'
+      },
+      'swordfish': {
+        image: './Images/swordfish.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/swordfish.txt'
+      },
+      'seafish': {
+        image: './Images/seafish.png',
+        file: 'https://raw.githubusercontent.com/IdeaLab-Design-Environments-Group/Otto/main/src/examples/Glossary/seafish.txt'
       }
     };
 
