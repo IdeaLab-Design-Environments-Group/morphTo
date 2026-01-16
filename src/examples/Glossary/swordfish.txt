@@ -1,0 +1,333 @@
+// Otto by the IdeaLab FabLab
+// =====================================================
+// LEMON → SWORDFISH (2D ONLY, NO SIDE STRIPS YET)
+//
+// Pieces:
+// - swordfish_head_final           (head union + female slots)
+// - swordfish_body                 (long body + 2 servo cutouts + 2 horn holes)
+// - swordfish_tail_final           (forked tail + ONLY 2 mini SLOTS like head)
+//
+// Separate cuttable connectors:
+// - face_connector
+// - tail_connector
+//
+// NEW (tabs that fit the slots):
+// - head_tab_top, head_tab_bottom
+// - tail_tab_top, tail_tab_bottom
+// (Tabs are rounded-rects; WIDTH matches slotW; HEIGHT/DEPTH is extended.)
+// =====================================================
+
+
+// -------------------- GLOBAL SCALE --------------------
+param coeff 3/4
+
+// -------------------- STYLE --------------------
+param fillCol #000000
+param op      200
+
+// -------------------- MATERIAL & FIT PARAMS --------------------
+param materialThickness0 3
+param kerf0 0.20
+param clearance0 0.15
+
+param materialThickness (materialThickness0 * coeff)
+param kerf (kerf0 * coeff)
+param clearance (clearance0 * coeff)
+
+// female slot width
+param slotW (materialThickness + clearance - kerf)
+
+
+// -------------------- SERVO PARAMS (SG90 BODY CUTOUT) --------------------
+param servoW0 11.5 + kerf0 + clearance0
+param servoH0 22.5 + kerf0 + clearance0
+
+param servoW (servoW0 * coeff)
+param servoH (servoH0 * coeff)
+
+
+// horn screw hole (from satsuma legs)
+param hornHoleR0 2.3
+param hornInset0 8
+
+param hornHoleR (hornHoleR0 * coeff)
+param hornInset (hornInset0 * coeff)
+
+
+// =====================================================
+// LAYOUT (SPACED OUT MORE)
+// =====================================================
+param pieceGap0 380
+param pieceGap (pieceGap0 * coeff)
+
+param faceX (-pieceGap)
+param faceY (0)
+
+param bodyX (0)
+param bodyY (0)
+
+param tailX (pieceGap)
+param tailY (0)
+
+// connector row (lower)
+param connX (0)
+param connY (-190 * coeff)
+param connGapX (170 * coeff)
+
+
+// =====================================================
+// FACE — TRIANGLES ONLY (LINEAR EDGES) + ELLIPSE INSIDE
+// =====================================================
+
+// ---------- main bill ----------
+param billLen0 175
+param billThk0 10
+
+param billLen (billLen0 * coeff)
+param billThk (billThk0 * coeff)
+
+shape triangle swordfish_bill {
+  base: billThk
+  height: billLen
+  position: [faceX + 40*coeff, 12.698754889593957]
+  rotation: -270
+  fill: false
+}
+
+// ---------- head wedge ----------
+param headLen0 95
+param headThk0 55
+
+param headLen (headLen0 * coeff)
+param headThk (headThk0 * coeff)
+
+shape triangle swordfish_head_wedge {
+  base: headThk
+  height: headLen
+  position: [faceX + 75*coeff, -18.143660486040663]
+  rotation: -270
+  fill: false
+}
+
+// ---------- inside ellipse ----------
+shape ellipse ellipse2 {
+  rotation: 90.14630444157173
+  position: [faceX + 128*coeff, -11.256339513959359]
+  radiusX: 27.913509101522777
+  radiusY: 20.14366048604064
+  fill: false
+}
+
+// head base union
+union swordfish_head_base {
+  add swordfish_head_wedge
+  add swordfish_bill
+  add ellipse2
+}
+
+
+// =====================================================
+// HEAD FLATTEN + FEMALE SLOTS (TOP + BOTTOM)
+// =====================================================
+
+// --- flatten rectangles (same as yours) ---
+shape rectangle head_flat_bottom {
+  position: [-194.96703743296274, -59.577104812894866]
+  width: 32.51207272792489
+  height: 48.36080213919732
+  fill: false
+}
+
+shape rectangle head_flat_top {
+  position: [-198.03608058399175, 30.951027672430744]
+  width: 58.92269028359715
+  height: 31.29898251383442
+  fill: false
+}
+
+
+
+difference swordfish_head_final {
+  add swordfish_head_base
+  add head_flat_bottom
+  add head_flat_top
+}
+
+
+// =====================================================
+// BODY — LONG SWORDFISH BODY + 2 SERVOS + 2 HOLES
+// =====================================================
+
+param bodyW0 190
+param bodyH0 45
+param bodyCornerR0 18
+
+param bodyW (bodyW0 * coeff)
+param bodyH (bodyH0 * coeff)
+param bodyCornerR (bodyCornerR0 * coeff)
+
+shape roundedRectangle swordfish_body_base {
+  width: bodyW
+  height: bodyH
+  radius: bodyCornerR
+  position: [0, 0]
+  rotation: 0
+  fill: false
+}
+
+shape roundedRectangle head_servo_cutout {
+  width: servoW
+  height: servoH
+  radius: -20
+  position: [-55.1875, 0]
+  rotation: 0
+  fill: false
+}
+
+shape roundedRectangle tail_servo_cutout {
+  width: servoW
+  height: servoH
+  radius: -20
+  position: [55.1875, 0]
+  rotation: 0
+  fill: false
+}
+
+shape circle head_servo_hole {
+  radius: hornHoleR
+  position: [-32.0625, 0]
+  rotation: 0
+  fill: false
+}
+
+shape circle tail_servo_hole {
+  radius: hornHoleR
+  position: [32.0625, 0]
+  rotation: 0
+  fill: false
+}
+
+difference swordfish_body {
+  add swordfish_body_base
+  add head_servo_cutout
+  add tail_servo_cutout
+  add head_servo_hole
+  add tail_servo_hole
+}
+
+
+// =====================================================
+// TAIL — SWORDFISH FORK + ONLY 2 MINI SLOTS (LIKE HEAD)
+// =====================================================
+
+param tailSpan0 95
+param tailHeight0 70
+param tailBaseW0 28
+
+param tailSpan (tailSpan0 * coeff)
+param tailHeight (tailHeight0 * coeff)
+param tailBaseW (tailBaseW0 * coeff)
+
+param forkInset0 40
+param forkInset (forkInset0 * coeff)
+
+param halfH (tailHeight/2)
+param leftX (tailX - tailSpan/2)
+param rightX (tailX + tailSpan/2)
+param forkX (rightX - forkInset)
+
+shape path swordfish_tail_base {
+  points: [
+    [leftX,                 tailY + tailBaseW/2],
+    [tailX - tailSpan*0.15, tailY + halfH*0.55],
+    [tailX + tailSpan*0.18, tailY + halfH*0.92],
+    [rightX,                tailY + halfH],
+    [tailX + tailSpan*0.22, tailY + halfH*0.18],
+    [forkX,                 tailY],
+    [tailX + tailSpan*0.22, tailY - halfH*0.18],
+    [rightX,                tailY - halfH],
+    [tailX + tailSpan*0.18, tailY - halfH*0.92],
+    [tailX - tailSpan*0.15, tailY - halfH*0.55],
+    [leftX,                 tailY - tailBaseW/2]
+  ]
+  closed: true
+  position: [0, 0]
+  rotation: 0
+  fill: false
+}
+
+
+
+// =====================================================
+// SEPARATE CONNECTORS (cut pieces) — KEEP AS-IS (SCREW HOLE STYLE)
+// =====================================================
+
+param connLen0 80
+param connW0   24
+param connR0   12
+
+param connLen (connLen0 * coeff)
+param connW   (connW0 * coeff)
+param connR   (connR0 * coeff)
+
+shape roundedRectangle face_conn_blank {
+  width: connLen
+  height: connW
+  radius: connR
+  position: [-140.9376045881989, -142.5]
+  rotation: 0
+  fill: false
+}
+
+shape circle face_conn_hole {
+  radius: hornHoleR
+  position: [-164.9376045881989, -142.5]
+  rotation: 0
+  fill: false
+}
+
+difference face_connector {
+  add face_conn_blank
+  add face_conn_hole
+}
+
+shape roundedRectangle tail_conn_blank {
+  width: connLen
+  height: connW
+  radius: connR
+  position: [137.29667984347253, -142.5]
+  rotation: 0
+  fill: false
+}
+
+shape circle tail_conn_hole {
+  radius: hornHoleR
+  position: [113.29667984347257, -142.5]
+  rotation: 0
+  fill: false
+}
+
+difference tail_connector {
+  add tail_conn_blank
+  add tail_conn_hole
+}
+
+
+// =====================================================
+// NEW: TAB CONNECTOR PIECES (MALE TABS THAT FIT THE SLOTS)
+// IMPORTANT: WIDTH = slotW, HEIGHT/DEPTH = tabDepth (EXTENDED)
+// =====================================================
+
+param tabDepth0 22
+param tabDepth (tabDepth0 * coeff)
+
+param tabW (slotW)
+param tabR (tabW/2)
+
+// spacing between top & bottom tab pieces on the connector row
+param tabGapY (22 * coeff)
+
+// -------- HEAD TAB CONNECTOR (2 tabs) --------
+
+
+// -------- TAIL TAB CONNECTOR (2 tabs) --------
