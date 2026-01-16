@@ -1,0 +1,703 @@
+// Otto by the IdeaLab FabLab
+// =====================================================
+// SATSUMA (TURTLE) — COMBINED FILE
+// Includes:
+// 1) Body + 4 legs (servo cutouts + horn screw hole on each leg)
+// 2) Press-fit Cube Head + Connector (with extra front slot)
+// 3) Shell (7 side plates + 1 top plate with 7 slots)
+//
+// ✅ All three are OFFSET so they DO NOT overlap when pasted together.
+// ✅ Renamed clashing params (slotW, bodyR, etc.) so everything coexists.
+// =====================================================
+
+
+// =====================================================
+// GLOBAL SCALE + MATERIAL/FIT (shared)
+// =====================================================
+param coeff 3/4
+
+param materialThickness0 3
+param kerf0 0.20
+param clearance0 0.15
+
+param materialThickness (materialThickness0 * coeff)
+param kerf (kerf0 * coeff)
+param clearance (clearance0 * coeff)
+
+
+// =====================================================
+// GLOBAL OFFSETS (move each “module” away from others)
+// =====================================================
+// Body block center
+param bodyOX 0
+param bodyOY 0
+
+// Head block (cube + connector) moved to the right
+param headOX (260 * coeff)
+param headOY 0
+
+// Shell block moved to the left
+param shellOX (-260 * coeff)
+param shellOY 0
+
+
+
+// #####################################################
+// 1) BODY + LEGS  (offset by bodyOX/bodyOY)
+// #####################################################
+
+// -------------------- SERVO PARAMS (SG90 BODY CUTOUT) --------------------
+param body_servoW0 11.5 + kerf0 + clearance0
+param body_servoH0 22.5 + kerf0 + clearance0
+
+param body_servoW (body_servoW0 * coeff)
+param body_servoH (body_servoH0 * coeff)
+
+// -------------------- BODY PARAMS --------------------
+param bodySides 8
+
+param bodyR0 80
+param bodyR (bodyR0 * coeff)
+
+param bodyRot 22.5   // angular → NOT scaled
+
+param legServoOffset (bodyR * 0.65454545455)
+param headServoOffset (bodyR * 0.73333333333)
+
+// -------------------- ANGLE HELPERS --------------------
+param c45  0.70710678
+param s45  0.70710678
+
+param c135 -0.70710678
+param s135  0.70710678
+
+param c225 -0.70710678
+param s225 -0.70710678
+
+param c315  0.70710678
+param s315 -0.70710678
+
+
+// -------------------- BODY BASE (OCTAGON) --------------------
+shape polygon satsuma_body_base {
+  position: [bodyOX + 0, bodyOY + 0]
+  sides: bodySides
+  radius: bodyR
+  rotation: bodyRot
+  fill: false
+}
+
+// -------------------- SERVO CUTOUTS (BODY ONLY — NO HOLES) --------------------
+shape roundedRectangle leg_servo_45 {
+  position: [bodyOX + legServoOffset*c45, bodyOY + legServoOffset*s45]
+  width: body_servoW
+  height: body_servoH
+  radius: -20
+  rotation: 45
+  fill: false
+}
+
+shape roundedRectangle leg_servo_135 {
+  position: [bodyOX + legServoOffset*c135, bodyOY + legServoOffset*s135]
+  width: body_servoW
+  height: body_servoH
+  radius: -20
+  rotation: 135
+  fill: false
+}
+
+shape roundedRectangle leg_servo_225 {
+  position: [bodyOX + legServoOffset*c225, bodyOY + legServoOffset*s225]
+  width: body_servoW
+  height: body_servoH
+  radius: -20
+  rotation: 225
+  fill: false
+}
+
+shape roundedRectangle leg_servo_315 {
+  position: [bodyOX + legServoOffset*c315, bodyOY + legServoOffset*s315]
+  width: body_servoW
+  height: body_servoH
+  radius: -20
+  rotation: 315
+  fill: false
+}
+
+// head servo cutout
+shape roundedRectangle head_servo_0 {
+  position: [bodyOX + 0, bodyOY + headServoOffset]
+  width: body_servoW
+  height: body_servoH
+  radius: -20
+  rotation: 0
+  fill: false
+}
+
+// -------------------- FINAL BODY --------------------
+difference satsuma_body {
+  add satsuma_body_base
+  add leg_servo_45
+  add leg_servo_135
+  add leg_servo_225
+  add leg_servo_315
+  add head_servo_0
+}
+
+
+// -------------------- LEGS (4x) — SG90 HORN SCREW HOLE ONLY --------------------
+param legLen0 95
+param legW0 24
+param legR0 12
+
+param legLen (legLen0 * coeff)
+param legW   (legW0 * coeff)
+param legR   (legR0 * coeff)
+
+param body_hornHoleR0 2.3
+param body_hornInset0 18
+
+param body_hornHoleR (body_hornHoleR0 * coeff)
+param body_hornInset (body_hornInset0 * coeff)
+
+// layout (relative to body offsets)
+param legsBaseX (bodyOX + bodyR + 120*coeff)
+param legsBaseY (bodyOY -bodyR - 40*coeff)
+param legsGapY  (legW + 14*coeff)
+
+shape roundedRectangle leg_blank_0 {
+  position: [legsBaseX, legsBaseY + 0*legsGapY]
+  width: legLen
+  height: legW
+  radius: legR
+  fill: false
+}
+shape circle leg_hole_0 {
+  position: [legsBaseX - legLen/2 + body_hornInset, legsBaseY + 0*legsGapY]
+  radius: body_hornHoleR
+  fill: false
+}
+difference satsuma_leg_0 { add leg_blank_0 add leg_hole_0 }
+
+shape roundedRectangle leg_blank_1 {
+  position: [legsBaseX, legsBaseY + 1*legsGapY]
+  width: legLen
+  height: legW
+  radius: legR
+  fill: false
+}
+shape circle leg_hole_1 {
+  position: [legsBaseX - legLen/2 + body_hornInset, legsBaseY + 1*legsGapY]
+  radius: body_hornHoleR
+  fill: false
+}
+difference satsuma_leg_1 { add leg_blank_1 add leg_hole_1 }
+
+shape roundedRectangle leg_blank_2 {
+  position: [legsBaseX, legsBaseY + 2*legsGapY]
+  width: legLen
+  height: legW
+  radius: legR
+  fill: false
+}
+shape circle leg_hole_2 {
+  position: [legsBaseX - legLen/2 + body_hornInset, legsBaseY + 2*legsGapY]
+  radius: body_hornHoleR
+  fill: false
+}
+difference satsuma_leg_2 { add leg_blank_2 add leg_hole_2 }
+
+shape roundedRectangle leg_blank_3 {
+  position: [legsBaseX, legsBaseY + 3*legsGapY]
+  width: legLen
+  height: legW
+  radius: legR
+  fill: false
+}
+shape circle leg_hole_3 {
+  position: [legsBaseX - legLen/2 + body_hornInset, legsBaseY + 3*legsGapY]
+  radius: body_hornHoleR
+  fill: false
+}
+difference satsuma_leg_3 { add leg_blank_3 add leg_hole_3 }
+
+
+
+// #####################################################
+// 2) HEAD (PRESS-FIT CUBE) + CONNECTOR  (offset by headOX/headOY)
+// #####################################################
+
+// -------------------- HEAD FIT --------------------
+param cube_slotW_base (materialThickness + clearance - kerf)
+param cube_jointScale 1.4
+param cube_slotW (cube_slotW_base * cube_jointScale)
+
+param cube_tabDepth cube_slotW
+param cube_eps (0.10 * coeff)
+
+// OFFSET TUNING
+param cube_tabIn0 0.85
+param cube_slotOut0 0.85
+param cube_tabIn (cube_tabIn0 * coeff)
+param cube_slotOut (cube_slotOut0 * coeff)
+
+// CUBE SIZE
+param cubeS0 50
+param cubeS (cubeS0 * coeff)
+
+param cube_jointInset0 14
+param cube_jointInset (cube_jointInset0 * coeff)
+
+// SCREW HOLE (SG90 HORN STYLE)
+param cube_hornHoleR0 2.3
+param cube_hornInset0 18
+param cube_hornHoleR (cube_hornHoleR0 * coeff)
+param cube_hornInset (cube_hornInset0 * coeff)
+
+// LAYOUT (uses headOX/headOY)
+param cube_gap0 18
+param cube_gap (cube_gap0 * coeff)
+param cube_plateStep (cubeS + cube_gap)
+
+param frontX (headOX + 0*cube_plateStep)
+param backX  (headOX + 1*cube_plateStep)
+param leftX  (headOX + 2*cube_plateStep)
+param rightX (headOX + 3*cube_plateStep)
+param topX   (headOX + 4*cube_plateStep)
+param botX   (headOX + 5*cube_plateStep)
+
+param Y0 headOY
+
+// EDGE HELPERS
+param cube_halfS (cubeS/2)
+param cube_edgeInset (cube_slotW/2 + cube_eps - cube_slotOut)
+
+param cube_Lx (-cube_halfS + cube_edgeInset)
+param cube_Rx ( cube_halfS - cube_edgeInset)
+param cube_Ty ( cube_halfS - cube_edgeInset)
+param cube_By (-cube_halfS + cube_edgeInset)
+
+param cube_p1 ( cube_jointInset)
+param cube_p2 (-cube_jointInset)
+
+param cube_tabPush (cube_tabDepth/2 - cube_tabIn)
+
+
+// BASE PLATES
+shape roundedRectangle plate_front_base { position:[frontX, Y0] width:cubeS height:cubeS radius:0 fill:false }
+shape roundedRectangle plate_back_base  { position:[backX,  Y0] width:cubeS height:cubeS radius:0 fill:false }
+shape roundedRectangle plate_left_base  { position:[leftX,  Y0] width:cubeS height:cubeS radius:0 fill:false }
+shape roundedRectangle plate_right_base { position:[rightX, Y0] width:cubeS height:cubeS radius:0 fill:false }
+shape roundedRectangle plate_top_base   { position:[topX,   Y0] width:cubeS height:cubeS radius:0 fill:false }
+shape roundedRectangle plate_bot_base   { position:[botX,   Y0] width:cubeS height:cubeS radius:0 fill:false }
+
+
+// FRONT — slots + extra center slot
+shape roundedRectangle front_slot_L1 { position:[frontX + cube_Lx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle front_slot_L2 { position:[frontX + cube_Lx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle front_slot_R1 { position:[frontX + cube_Rx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle front_slot_R2 { position:[frontX + cube_Rx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle front_slot_T1 { position:[frontX + cube_p1, Y0 + cube_Ty] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle front_slot_T2 { position:[frontX + cube_p2, Y0 + cube_Ty] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle front_slot_B1 { position:[frontX + cube_p1, Y0 + cube_By] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle front_slot_B2 { position:[frontX + cube_p2, Y0 + cube_By] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+shape roundedRectangle front_slot_CONN {
+  position:[frontX, Y0]
+  width:cube_slotW
+  height:cube_slotW
+  radius:0
+  rotation:0
+  fill:false
+}
+
+difference cube_front {
+  add plate_front_base
+  add front_slot_L1 add front_slot_L2
+  add front_slot_R1 add front_slot_R2
+  add front_slot_T1 add front_slot_T2
+  add front_slot_B1 add front_slot_B2
+  add front_slot_CONN
+}
+
+
+// BACK — same as front, no center slot
+shape roundedRectangle back_slot_L1 { position:[backX + cube_Lx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle back_slot_L2 { position:[backX + cube_Lx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle back_slot_R1 { position:[backX + cube_Rx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle back_slot_R2 { position:[backX + cube_Rx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle back_slot_T1 { position:[backX + cube_p1, Y0 + cube_Ty] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle back_slot_T2 { position:[backX + cube_p2, Y0 + cube_Ty] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle back_slot_B1 { position:[backX + cube_p1, Y0 + cube_By] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle back_slot_B2 { position:[backX + cube_p2, Y0 + cube_By] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+difference cube_back {
+  add plate_back_base
+  add back_slot_L1 add back_slot_L2
+  add back_slot_R1 add back_slot_R2
+  add back_slot_T1 add back_slot_T2
+  add back_slot_B1 add back_slot_B2
+}
+
+
+// LEFT — tabs all edges
+shape roundedRectangle left_tab_L1 { position:[leftX - cube_halfS - cube_tabPush, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle left_tab_L2 { position:[leftX - cube_halfS - cube_tabPush, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle left_tab_R1 { position:[leftX + cube_halfS + cube_tabPush, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle left_tab_R2 { position:[leftX + cube_halfS + cube_tabPush, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle left_tab_T1 { position:[leftX + cube_p1, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle left_tab_T2 { position:[leftX + cube_p2, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+shape roundedRectangle left_tab_B1 { position:[leftX + cube_p1, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle left_tab_B2 { position:[leftX + cube_p2, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+union cube_left {
+  add plate_left_base
+  add left_tab_L1 add left_tab_L2
+  add left_tab_R1 add left_tab_R2
+  add left_tab_T1 add left_tab_T2
+  add left_tab_B1 add left_tab_B2
+}
+
+
+// RIGHT — same as left
+shape roundedRectangle right_tab_L1 { position:[rightX - cube_halfS - cube_tabPush, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle right_tab_L2 { position:[rightX - cube_halfS - cube_tabPush, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle right_tab_R1 { position:[rightX + cube_halfS + cube_tabPush, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle right_tab_R2 { position:[rightX + cube_halfS + cube_tabPush, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+shape roundedRectangle right_tab_T1 { position:[rightX + cube_p1, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle right_tab_T2 { position:[rightX + cube_p2, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+shape roundedRectangle right_tab_B1 { position:[rightX + cube_p1, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle right_tab_B2 { position:[rightX + cube_p2, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+union cube_right {
+  add plate_right_base
+  add right_tab_L1 add right_tab_L2
+  add right_tab_R1 add right_tab_R2
+  add right_tab_T1 add right_tab_T2
+  add right_tab_B1 add right_tab_B2
+}
+
+
+// TOP — slots L/R + tabs F/B
+shape roundedRectangle top_slot_L1 { position:[topX + cube_Lx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle top_slot_L2 { position:[topX + cube_Lx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle top_slot_R1 { position:[topX + cube_Rx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle top_slot_R2 { position:[topX + cube_Rx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+difference cube_top_plate {
+  add plate_top_base
+  add top_slot_L1 add top_slot_L2
+  add top_slot_R1 add top_slot_R2
+}
+
+shape roundedRectangle top_tab_F1 { position:[topX + cube_p1, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle top_tab_F2 { position:[topX + cube_p2, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle top_tab_B1 { position:[topX + cube_p1, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle top_tab_B2 { position:[topX + cube_p2, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+union cube_top {
+  add cube_top_plate
+  add top_tab_F1 add top_tab_F2
+  add top_tab_B1 add top_tab_B2
+}
+
+
+// BOTTOM — same as top
+shape roundedRectangle bot_slot_L1 { position:[botX + cube_Lx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle bot_slot_L2 { position:[botX + cube_Lx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle bot_slot_R1 { position:[botX + cube_Rx, Y0 + cube_p1] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+shape roundedRectangle bot_slot_R2 { position:[botX + cube_Rx, Y0 + cube_p2] width:cube_slotW height:cube_tabDepth rotation:90 fill:false }
+
+difference cube_bottom_plate {
+  add plate_bot_base
+  add bot_slot_L1 add bot_slot_L2
+  add bot_slot_R1 add bot_slot_R2
+}
+
+shape roundedRectangle bot_tab_F1 { position:[botX + cube_p1, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle bot_tab_F2 { position:[botX + cube_p2, Y0 - cube_halfS - cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle bot_tab_B1 { position:[botX + cube_p1, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+shape roundedRectangle bot_tab_B2 { position:[botX + cube_p2, Y0 + cube_halfS + cube_tabPush] width:cube_slotW height:cube_tabDepth rotation:0 fill:false }
+
+union cube_bottom {
+  add cube_bottom_plate
+  add bot_tab_F1 add bot_tab_F2
+  add bot_tab_B1 add bot_tab_B2
+}
+
+
+// CONNECTOR — tab + screw hole (placed after cube plates)
+param connLen0 60
+param connW0 18
+param connLen (connLen0 * coeff)
+param connW   (connW0 * coeff)
+
+param connX (headOX + 6*cube_plateStep)
+param connY Y0
+
+shape roundedRectangle connector_body {
+  position:[connX, connY]
+  width:connLen
+  height:connW
+  radius:0
+  fill:false
+}
+
+shape circle connector_hole {
+  position:[connX - connLen/2 + cube_hornInset, connY]
+  radius:cube_hornHoleR
+  fill:false
+}
+
+// tab at RIGHT end
+shape roundedRectangle connector_tab {
+  position:[connX + connLen/2 + cube_tabPush, connY]
+  width:cube_slotW
+  height:cube_slotW
+  radius:0
+  fill:false
+}
+
+difference connector_plate {
+  add connector_body
+  add connector_hole
+}
+
+union cube_connector {
+  add connector_plate
+  add connector_tab
+}
+
+
+
+// #####################################################
+// 3) SHELL  (offset by shellOX/shellOY)
+// #####################################################
+
+param shell_slotW (materialThickness + clearance - kerf)
+
+// reference body params for shell
+param shell_bodySides 8
+param shell_bodyR0 80
+param shell_bodyR (shell_bodyR0 * coeff)
+param shell_bodyRot 22.5
+
+param octSideFactor 0.76536686473
+param sidePlateLen (shell_bodyR * octSideFactor)
+
+param shellH0 40
+param shellH (shellH0 * coeff)
+
+param shellPlateR0 3
+param shellPlateR (shellPlateR0 * coeff)
+
+// tab params
+param tabSpan0 18
+param tabSpan (tabSpan0 * coeff)
+param tabDepth_shell (materialThickness)     // TAB HEIGHT = material thickness
+param tabR0 2
+param tabR (tabR0 * coeff)
+
+// slot placement
+param apothemFactor 0.92387953251
+param apothem (shell_bodyR * apothemFactor)
+param slotCenterR (apothem - tabDepth_shell/2)
+
+// layout (offset)
+param platesBaseX shellOX
+param platesBaseY (shellOY - 140 * coeff)
+param platesGapY  (shellH + 18*coeff)
+param sidePlateOffsetX (180 * coeff)
+
+
+// 7 SIDE PLATES (WITH TABS)
+shape roundedRectangle side_plate_blank_0 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 0*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_0 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 0*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_0 { add side_plate_blank_0 add side_plate_tab_0 }
+
+shape roundedRectangle side_plate_blank_1 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 1*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_1 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 1*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_1 { add side_plate_blank_1 add side_plate_tab_1 }
+
+shape roundedRectangle side_plate_blank_2 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 2*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_2 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 2*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_2 { add side_plate_blank_2 add side_plate_tab_2 }
+
+shape roundedRectangle side_plate_blank_3 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 3*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_3 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 3*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_3 { add side_plate_blank_3 add side_plate_tab_3 }
+
+shape roundedRectangle side_plate_blank_4 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 4*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_4 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 4*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_4 { add side_plate_blank_4 add side_plate_tab_4 }
+
+shape roundedRectangle side_plate_blank_5 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 5*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_5 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 5*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_5 { add side_plate_blank_5 add side_plate_tab_5 }
+
+shape roundedRectangle side_plate_blank_6 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 6*platesGapY]
+  width: sidePlateLen
+  height: shellH
+  radius: shellPlateR
+  fill: false
+}
+shape roundedRectangle side_plate_tab_6 {
+  position: [platesBaseX + sidePlateOffsetX, platesBaseY + 6*platesGapY + shellH/2 + tabDepth_shell/2]
+  width: tabSpan
+  height: tabDepth_shell
+  radius: tabR
+  fill: false
+}
+union satsuma_side_plate_6 { add side_plate_blank_6 add side_plate_tab_6 }
+
+
+// TOP PLATE WITH 7 SLOTS (also offset by shellOX/shellOY)
+shape polygon satsuma_top_plate_base {
+  position: [shellOX + 0, shellOY + 0]
+  sides: shell_bodySides
+  radius: shell_bodyR
+  rotation: shell_bodyRot
+  fill: false
+}
+
+shape roundedRectangle top_slot_k0 {
+  position: [shellOX + slotCenterR*0.71710678, shellOY + slotCenterR*0.70710678]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 135
+  fill: false
+}
+shape roundedRectangle top_slot_k2 {
+  position: [shellOX - slotCenterR*0.71710678, shellOY + slotCenterR*0.70710678]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 225
+  fill: false
+}
+shape roundedRectangle top_slot_k3 {
+  position: [shellOX - slotCenterR - 0.1, shellOY + 0]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 270
+  fill: false
+}
+shape roundedRectangle top_slot_k4 {
+  position: [shellOX - slotCenterR*0.71710678, shellOY - slotCenterR*0.70710678]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 315
+  fill: false
+}
+shape roundedRectangle top_slot_k5 {
+  position: [shellOX + 0, shellOY - slotCenterR - 0.1]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 0
+  fill: false
+}
+shape roundedRectangle top_slot_k6 {
+  position: [shellOX + slotCenterR*0.71710678, shellOY - slotCenterR*0.70710678]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 45
+  fill: false
+}
+shape roundedRectangle top_slot_k7 {
+  position: [shellOX + slotCenterR + 0.1, shellOY + 0]
+  width: tabSpan
+  height: shell_slotW
+  rotation: 90
+  fill: false
+}
+
+difference satsuma_top_plate {
+  add satsuma_top_plate_base
+  add top_slot_k0
+  add top_slot_k2
+  add top_slot_k3
+  add top_slot_k4
+  add top_slot_k5
+  add top_slot_k6
+  add top_slot_k7
+}
