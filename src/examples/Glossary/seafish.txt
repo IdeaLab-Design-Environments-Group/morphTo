@@ -1,0 +1,267 @@
+// Otto by the IdeaLab FabLab
+// =====================================================
+// CARTOON SEA FISH — BODY UNION FIRST, THEN DIFF
+// UPDATES:
+// - Mouth REMOVED
+// - LED eye hole kept
+// - ONE screw/servo horn hole per fin
+// - Original forked tail preserved
+// - Tail screw hole added (centered near tail root)
+// - NEW: material thickness = 4mm
+// =====================================================
+
+
+// -------------------- GLOBAL SCALE --------------------
+param coeff 3/4
+
+// -------------------- STYLE --------------------
+param fillCol #000000
+param op 200
+
+// -------------------- MATERIAL --------------------
+
+param materialThickness0 4
+param materialThickness (materialThickness0 * coeff)
+
+
+// -------------------- SERVO / FIT PARAMS --------------------
+param kerf0 0.20
+param clearance0 0.15
+
+param servoW0 11.5 + kerf0 + clearance0
+param servoH0 22.5 + kerf0 + clearance0
+
+param servoW (servoW0 * coeff)
+param servoH (servoH0 * coeff)
+
+
+// SG90 horn screw hole
+param hornHoleR0 2.3
+param hornHoleR (hornHoleR0 * coeff)
+
+
+// -------------------- LED EYE HOLE --------------------
+param ledEyeR0 2.5
+param ledEyeR (ledEyeR0 * coeff)
+
+
+// =====================================================
+// LAYOUT
+// =====================================================
+param pieceGap0 340
+param pieceGap (pieceGap0 * coeff)
+
+param mainX 0
+param mainY 0
+
+param tailX (pieceGap)
+param tailY 0
+
+param finX (-pieceGap * 0.55)
+param finTopY (-200 * coeff)
+param finBotY (-290 * coeff)
+
+
+// =====================================================
+// BODY SILHOUETTE PIECES (NO MOUTH)
+// =====================================================
+
+// Main body
+param bodyRX0 105
+param bodyRY0 85
+param bodyRX (bodyRX0 * coeff)
+param bodyRY (bodyRY0 * coeff)
+
+shape ellipse body_ellipse {
+  position: [mainX + 10*coeff, mainY]
+  radiusX: bodyRX
+  radiusY: bodyRY
+  fill: false
+}
+
+// Head bulge
+param headRX0 55
+param headRY0 55
+param headRX (headRX0 * coeff)
+param headRY (headRY0 * coeff)
+
+shape ellipse head_ellipse {
+  position: [mainX - 55*coeff, mainY]
+  radiusX: headRX
+  radiusY: headRY
+  fill: false
+}
+
+
+// =====================================================
+// BODY UNION — FIRST
+// =====================================================
+union fish_body_solid {
+  add body_ellipse
+  add head_ellipse
+}
+
+
+// =====================================================
+// SERVO CUTOUTS (MAIN BODY)
+// =====================================================
+
+// Tail servo
+shape roundedRectangle tail_servo_cutout {
+  width: servoW
+  height: servoH
+  radius: -20
+  position: [mainX + 85*coeff, mainY]
+  fill: false
+}
+
+// Fin servos
+param finServoAngle 28
+
+shape roundedRectangle left_fin_servo_cutout {
+  width: servoW
+  height: servoH
+  radius: -20
+  position: [mainX + 5*coeff, mainY + 58*coeff]
+  rotation: finServoAngle
+  fill: false
+}
+
+shape roundedRectangle right_fin_servo_cutout {
+  width: servoW
+  height: servoH
+  radius: -20
+  position: [mainX + 5*coeff, mainY - 58*coeff]
+  rotation: -finServoAngle
+  fill: false
+}
+
+
+// =====================================================
+// LED EYE HOLE (CUT)
+// =====================================================
+shape circle led_eye_hole {
+  radius: ledEyeR
+  position: [mainX - 78*coeff, mainY + 8*coeff]
+  fill: false
+}
+
+
+// =====================================================
+// FINAL MAIN BODY — DIFF AFTER UNION
+// =====================================================
+difference sea_fish_main {
+  add fish_body_solid
+  add tail_servo_cutout
+  add left_fin_servo_cutout
+  add right_fin_servo_cutout
+  add led_eye_hole
+}
+
+
+// =====================================================
+// ORIGINAL FORKED TAIL — SEPARATE PIECE (+ screw hole)
+// =====================================================
+param tailSpan0 110
+param tailHeight0 85
+param tailBaseW0 34
+
+param tailSpan (tailSpan0 * coeff)
+param tailHeight (tailHeight0 * coeff)
+param tailBaseW (tailBaseW0 * coeff)
+
+param forkInset0 46
+param forkInset (forkInset0 * coeff)
+
+param halfH (tailHeight/2)
+param leftX (tailX - tailSpan/2)
+param rightX (tailX + tailSpan/2)
+param forkX (rightX - forkInset)
+
+// Tail silhouette
+shape path sea_fish_tail_shape {
+  points: [
+    [leftX,                 tailY + tailBaseW/2],
+    [tailX - tailSpan*0.18, tailY + halfH*0.60],
+    [tailX + tailSpan*0.12, tailY + halfH*0.98],
+    [rightX,                tailY + halfH],
+    [tailX + tailSpan*0.22, tailY + halfH*0.20],
+    [forkX,                 tailY],
+    [tailX + tailSpan*0.22, tailY - halfH*0.20],
+    [rightX,                tailY - halfH],
+    [tailX + tailSpan*0.12, tailY - halfH*0.98],
+    [tailX - tailSpan*0.18, tailY - halfH*0.60],
+    [leftX,                 tailY - tailBaseW/2]
+  ]
+  closed: true
+  fill: false
+}
+
+// tail screw hole (near the root/base of tail)
+shape circle tail_screw_hole {
+  radius: hornHoleR
+  position: [tailX - 18*coeff, tailY]
+  fill: false
+}
+
+difference sea_fish_tail {
+  add sea_fish_tail_shape
+  add tail_screw_hole
+}
+
+
+// =====================================================
+// FINS — ONE SCREW HOLE EACH
+// =====================================================
+param finW0 95
+param finH0 70
+param finW (finW0 * coeff)
+param finH (finH0 * coeff)
+
+// Top fin
+shape path fin_top_shape {
+  points: [
+    [finX - finW*0.45, finTopY],
+    [finX - finW*0.15, finTopY + finH*0.55],
+    [finX + finW*0.10, finTopY + finH*0.85],
+    [finX + finW*0.45, finTopY + finH*0.15],
+    [finX + finW*0.25, finTopY - finH*0.10]
+  ]
+  closed: true
+  fill: false
+}
+
+shape circle fin_top_screw_hole {
+  radius: hornHoleR
+  position: [finX + 18*coeff, finTopY + 22*coeff]
+  fill: false
+}
+
+difference sea_fish_fin_top {
+  add fin_top_shape
+  add fin_top_screw_hole
+}
+
+// Bottom fin
+shape path fin_bottom_shape {
+  points: [
+    [finX - finW*0.45, finBotY],
+    [finX - finW*0.05, finBotY - finH*0.55],
+    [finX + finW*0.18, finBotY - finH*0.75],
+    [finX + finW*0.45, finBotY - finH*0.12],
+    [finX + finW*0.22, finBotY + finH*0.05]
+  ]
+  closed: true
+  fill: false
+}
+
+shape circle fin_bottom_screw_hole {
+  radius: hornHoleR
+  position: [finX + 18*coeff, finBotY - 22*coeff]
+  fill: false
+}
+
+difference sea_fish_fin_bottom {
+  add fin_bottom_shape
+  add fin_bottom_screw_hole
+}
