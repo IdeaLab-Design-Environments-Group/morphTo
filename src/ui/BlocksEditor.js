@@ -72,17 +72,6 @@ const TOOLBOX_XML = `
     </block>
   </category>
 
-  <category name="Control" colour="#5C81A6">
-    <block type="aqui_for">
-      <value name="FROM">
-        <shadow type="math_number"><field name="NUM">0</field></shadow>
-      </value>
-      <value name="TO">
-        <shadow type="math_number"><field name="NUM">2</field></shadow>
-      </value>
-    </block>
-  </category>
-
   <category name="Shape Properties" colour="#CE9E36">
     <block type="aqui_prop_expr"/>
     <block type="aqui_prop_bool"/>
@@ -106,6 +95,20 @@ const TOOLBOX_XML = `
 
   <category name="Lists" colour="#D65C5C">
     <block type="lists_create_with"/>
+  </category>
+
+  <!-- Otto-only category; morphTo has no loop block. Hue #815CA6 is a channel
+       permutation of morphTo's Boolean #5C81A6, keeping the same palette family
+       while staying distinct from every morphTo category colour. -->
+  <category name="Control" colour="#815CA6">
+    <block type="aqui_for">
+      <value name="FROM">
+        <shadow type="math_number"><field name="NUM">0</field></shadow>
+      </value>
+      <value name="TO">
+        <shadow type="math_number"><field name="NUM">2</field></shadow>
+      </value>
+    </block>
   </category>
 </xml>
 `;
@@ -464,6 +467,8 @@ export class BlocksEditor extends Component {
         const S_COLOR = '#5CA65C';
         const P_COLOR = '#CE9E36';
         const B_COLOR = '#5C81A6';
+        // Otto-only; see the Control category comment in TOOLBOX_XML.
+        const C_COLOR = '#815CA6';
         const R_COLOR = '#8696D0';
 
         const collectLinesUnique_ = (blk, input = 'STACK') => {
@@ -636,7 +641,7 @@ export class BlocksEditor extends Component {
                 this.setInputsInline(true);
                 this.setPreviousStatement(true, null);
                 this.setNextStatement(true, null);
-                this.setColour(B_COLOR);
+                this.setColour(C_COLOR);
             }
         };
         JS['aqui_for'] = blk => {

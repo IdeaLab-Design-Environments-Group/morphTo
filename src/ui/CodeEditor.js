@@ -11,6 +11,13 @@ import { ReplaceSceneCommand } from '../commands/sceneCommands.js';
 
 export class CodeEditor extends Component {
     /**
+     * Starter buffer the editor is seeded with — byte-for-byte the contents of
+     * morphTo's `#code-editor` textarea in index.html.
+     * @type {string}
+     */
+    static STARTER_CODE = '//Otto by the IdeaLab Fablab\n\n';
+
+    /**
      * @param {HTMLElement} container
      * @param {import('../core/ShapeStore.js').ShapeStore} shapeStore
      * @param {import('../core/ParameterStore.js').ParameterStore} parameterStore
@@ -30,7 +37,6 @@ export class CodeEditor extends Component {
         this.editor = null; // CodeMirror instance
         this.textarea = null; // Fallback textarea instance
         this.output = null;
-        this.runButton = null;
 
         // Bidirectional sync state
         this.isApplyingCode = false; // true while code->scene update is running
@@ -42,6 +48,13 @@ export class CodeEditor extends Component {
         this._editorBoundTo = null;
         this.lastCodeEditAt = 0;
         /**
+         * True until something replaces the seeded starter buffer. While it
+         * holds, an empty scene is not allowed to blank the editor — the first
+         * scene->code sync would otherwise wipe the starter code on load.
+         * @type {boolean}
+         */
+        this._seedIntact = true;
+        /**
          * Optional hooks fired around a code-driven scene rebuild, so a
          * mediator can mute listeners that would otherwise mirror the
          * resulting shape events back into the source. Set by
@@ -51,59 +64,67 @@ export class CodeEditor extends Component {
         this.onSceneRebuildStart = null;
         /** @type {?() => void} */
         this.onSceneRebuildEnd = null;
+        /**
+         * Optional host run handler. morphTo's Run wiring does more than
+         * execute the source (it also fills the AST/Errors footer panels and
+         * re-solves constraints), so the host can claim every run trigger —
+         * the Run button and the Shift/Ctrl/Cmd-Enter keys — by setting this.
+         * Defaults to a plain {@link runCode} call.
+         * @type {?() => void}
+         */
+        this.onRunRequest = null;
+        /**
+         * Optional host output sink, called with every {@link showOutput}
+         * message as `(message, type)`. The in-pane console is detached from
+         * the DOM to match morphTo's chrome-free editor pane, so this is how a
+         * host surfaces run status, help text or AST dumps in its own panels.
+         * @type {?(message: string, type: string) => void}
+         */
+        this.onOutput = null;
     }
 
+    /** Fire a run through the host handler when one is installed. */
+    requestRun() {
+        if (typeof this.onRunRequest === 'function') {
+            this.onRunRequest();
+            return;
+        }
+        this.runCode();
+    }
+
+    /**
+     * Render the editor pane.
+     *
+     * morphTo's editor pane is *only* the editor: Run, View AST, Errors and
+     * Export all live in the footer, and there is no in-pane console. So this
+     * renders no chrome of its own — the textarea goes straight into the
+     * container, exactly as morphTo's `#text-editor-container` holds it.
+     *
+     * morphTo's own markup already ships `<textarea id="code-editor">` inside
+     * that container, so it is adopted rather than replaced; the fallback path
+     * (tests, or any host without the markup) creates the same element.
+     */
     render() {
-        this.container.innerHTML = '';
-        this.container.classList.add('code-editor');
-
-        // Header with buttons
-        const header = this.createElement('div', { class: 'code-editor__header' });
-
-        this.runButton = this.createElement('button', {
-            class: 'code-editor__btn code-editor__btn--run',
-            type: 'button'
-        }, '▶ Run');
-        this.runButton.addEventListener('click', () => this.runCode());
-        header.appendChild(this.runButton);
-
-        const clearBtn = this.createElement('button', {
-            class: 'code-editor__btn code-editor__btn--clear',
-            type: 'button'
-        }, 'Clear');
-        clearBtn.addEventListener('click', () => this.clearCode());
-        header.appendChild(clearBtn);
-
-        const astBtn = this.createElement('button', {
-            class: 'code-editor__btn code-editor__btn--ast',
-            type: 'button'
-        }, 'AST');
-        astBtn.addEventListener('click', () => this.showAst());
-        header.appendChild(astBtn);
-
-        const helpBtn = this.createElement('button', {
-            class: 'code-editor__btn code-editor__btn--help',
-            type: 'button'
-        }, '?');
-        helpBtn.addEventListener('click', () => this.showHelp());
-        header.appendChild(helpBtn);
-
-        this.container.appendChild(header);
-
-        // Wrapper for CodeMirror
-        const editorWrapper = this.createElement('div', { class: 'code-editor__wrapper' });
-
-        // Create textarea for CodeMirror
-        const textarea = this.createElement('textarea', { id: 'otto-code-editor' });
-        textarea.value = '';
+        // `:scope >` matters: after fromTextArea() runs, CodeMirror keeps its own
+        // hidden textarea *inside* the .CodeMirror div, and a bare querySelector
+        // would adopt that on a re-render.
+        let textarea = this.container.querySelector(':scope > textarea');
+        if (!textarea) {
+            textarea = this.createElement('textarea', { id: 'code-editor' });
+            this.container.appendChild(textarea);
+        }
+        // morphTo seeds the textarea in markup; only fall back when it is bare.
+        if (!textarea.value) {
+            textarea.value = CodeEditor.STARTER_CODE;
+        }
         this.textarea = textarea;
-        editorWrapper.appendChild(textarea);
-        this.container.appendChild(editorWrapper);
 
-        // Output/console area
+        // The output console is kept alive but detached: every showOutput()
+        // caller (runCode, clearCode, showHelp, showAst) keeps working and the
+        // text stays readable via getOutputText() / the onOutput hook, while
+        // nothing is added to morphTo's DOM.
         this.output = this.createElement('div', { class: 'code-editor__output' });
-        this.output.innerHTML = '<span class="code-editor__output-hint">Output will appear here...</span>';
-        this.container.appendChild(this.output);
+        this.output.textContent = 'Output will appear here...';
 
         // Initialize CodeMirror after DOM is ready
         requestAnimationFrame(() => this.initCodeMirror(textarea));
@@ -123,33 +144,20 @@ export class CodeEditor extends Component {
             return;
         }
 
-        // Define Aqui/Otto syntax mode. The keyword, shape and color lists mirror
-        // the Lexer's keyword table (src/programming/Lexer.js) so highlighting stays
-        // in sync with what the language actually parses. Matching is case-insensitive
-        // because the Lexer lowercases identifiers before looking them up.
-        CodeMirror.defineSimpleMode('otto', {
+        // AQUI syntax mode — the rule table is copied verbatim from morphTo's
+        // setupCodeMirror() so token colouring is pixel-identical.
+        CodeMirror.defineSimpleMode('aqui', {
             start: [
-                // Comments come first so `//` is never mistaken for a divide operator.
-                { regex: /\/\/.*/, token: 'comment' },
-                // Literals
-                { regex: /"(?:[^\\]|\\.)*?"/, token: 'string' },
-                { regex: /#[0-9a-fA-F]{3,8}\b/, token: 'string-2' },
-                { regex: /\d+\.?\d*/, token: 'number' },
-                { regex: /\b(?:true|false)\b/i, token: 'atom' },
-                // Property keys: an identifier immediately followed by a colon
-                // (e.g. width:, depth:, rotation:). Placed before keywords so every
-                // key inside a shape/transform block is coloured consistently.
-                { regex: /[A-Za-z_]\w*(?=\s*:)/, token: 'property' },
-                // Language keywords (control flow, transforms, styling, turtle, constraints)
-                { regex: /\b(?:param|shape|layer|transform|add|subtract|rotate|scale|position|if|else|endif|and|or|not|for|from|to|step|in|def|return|union|difference|intersection|draw|forward|backward|right|left|goto|penup|pendown|constraints|coincident|distance|horizontal|vertical|fill|filled|fillcolor|color|stroke|strokecolor|strokewidth|opacity|alpha|transparent|visible|hidden|style|thickness|border|background)\b/i, token: 'keyword' },
-                // Shape primitives
-                { regex: /\b(?:circle|rectangle|roundedrectangle|chamferrectangle|triangle|ellipse|polygon|star|arc|path|line|arrow|text|donut|spiral|cross|wave|slot|gear)\b/i, token: 'variable-2' },
-                // Named colors
-                { regex: /\b(?:red|green|blue|yellow|orange|purple|pink|brown|black|white|gray|grey|lightgray|lightgrey|darkgray|darkgrey|cyan|magenta|lime|navy|teal|silver|gold)\b/i, token: 'string-2' },
-                // Operators (arithmetic, comparison, bitwise)
-                { regex: /[+\-*/%=<>!&|^~?@$]+/, token: 'operator' },
-                { regex: /[\{\[\(]/, indent: true },
-                { regex: /[\}\]\)]/, dedent: true }
+                {regex: /\/\/.*/, token: 'comment'},
+                {regex: /\b(?:shape|param|layer|transform|add|rotate|scale|position|if|else|for|from|to|step|def|return|union|difference|intersection|draw|forward|backward|right|left|goto|penup|pendown|fill|fillColor|color|strokeColor|strokeWidth|opacity|constraints|coincident|distance|horizontal|vertical)\b/, token: 'keyword'},
+                {regex: /\b(?:circle|rectangle|triangle|ellipse|polygon|star|arc|roundedRectangle|path|arrow|text|donut|spiral|cross|wave|slot|chamferRectangle|gear|dovetailPin|dovetailTail|doubleDovetailPin|doubleDovetailTail|fingerJoint|fingerJointMale|fingerJointFemale|tenon|mortise|scarfJoint|lapJoint|crossHalving|tJoint|dadoJoint|slotJoint|tabJoint|miterJoint|buttJoint)\b/, token: 'variable-2'},
+                {regex: /\d+\.?\d*/, token: 'number'},
+                {regex: /"(?:[^\\]|\\.)*?"/, token: 'string'},
+                {regex: /#[0-9a-fA-F]{3,8}/, token: 'string-2'},
+                {regex: /\b(?:red|green|blue|yellow|orange|purple|pink|brown|black|white|gray|grey|cyan|magenta|lime|navy|teal|silver|gold)\b/, token: 'string-2'},
+                {regex: /[+\-*\/=<>!]+/, token: 'operator'},
+                {regex: /[\{\[\(]/, indent: true},
+                {regex: /[\}\]\)]/, dedent: true}
             ],
             meta: {
                 dontIndentStates: ['comment'],
@@ -157,20 +165,20 @@ export class CodeEditor extends Component {
             }
         });
 
-        // Create CodeMirror instance
+        // Construction options match morphTo's CodeMirror.fromTextArea call exactly.
         this.editor = CodeMirror.fromTextArea(textarea, {
-            mode: 'otto',
+            mode: 'aqui',
             theme: 'default',
             lineNumbers: true,
             autoCloseBrackets: true,
             matchBrackets: true,
-            indentUnit: 4,
-            tabSize: 4,
+            indentUnit: 2,
+            tabSize: 2,
             lineWrapping: false,
             extraKeys: {
-                'Shift-Enter': () => this.runCode(),
-                'Ctrl-Enter': () => this.runCode(),
-                'Cmd-Enter': () => this.runCode()
+                'Shift-Enter': () => this.requestRun(),
+                'Ctrl-Enter': () => this.requestRun(),
+                'Cmd-Enter': () => this.requestRun()
             }
         });
 
@@ -285,6 +293,7 @@ export class CodeEditor extends Component {
             if (typeof this.editor.on === 'function') {
                 this.editor.on('change', () => {
                     this.lastCodeEditAt = Date.now();
+                    this._seedIntact = false;
                 });
                 // If we queued scene->code while user was typing, apply once editor loses focus
                 this.editor.on('blur', () => {
@@ -340,6 +349,12 @@ export class CodeEditor extends Component {
 
         this.isSyncingFromScene = true;
         const { code, shapeRanges } = this.generateCodeFromScene();
+        if (code === '' && this._seedIntact) {
+            // Empty scene, untouched starter buffer: keep the seed.
+            this.shapeCodeRanges = shapeRanges;
+            this.isSyncingFromScene = false;
+            return;
+        }
         // Only set if changed to avoid resetting cursor constantly
         if (this.editor.getValue() !== code) {
             const cursor = this.editor.getCursor();
@@ -503,7 +518,7 @@ export class CodeEditor extends Component {
     clearCode() {
         this.setCode('', { silent: false, source: 'clear' });
         this.clearCanvasShapes();
-        this.output.innerHTML = '<span class="code-editor__output-hint">Output will appear here...</span>';
+        this.showOutput('Output will appear here...', 'info');
     }
 
     clearCanvasShapes() {
@@ -597,6 +612,16 @@ SHORTCUTS
     showOutput(message, type = 'info') {
         this.output.className = `code-editor__output code-editor__output--${type}`;
         this.output.textContent = message;
+        this.onOutput?.(message, type);
+    }
+
+    /**
+     * The most recent {@link showOutput} text. The console is detached from the
+     * DOM, so this (or the {@link onOutput} hook) is how a host reads it.
+     * @returns {string}
+     */
+    getOutputText() {
+        return this.output ? this.output.textContent : '';
     }
 
     /**
@@ -617,6 +642,9 @@ SHORTCUTS
     setCode(code, { silent = false, source = 'external' } = {}) {
         if (!this.editor) return;
         const text = String(code ?? '');
+        // Any host write claims ownership of the buffer, even a no-op one, so
+        // the starter seed can never be reinstated over restored state.
+        this._seedIntact = false;
         if (this.editor.getValue() === text) return;
         this.editor.setValue(text);
         if (!silent) {
