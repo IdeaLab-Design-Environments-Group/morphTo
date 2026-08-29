@@ -91,6 +91,10 @@ export class MorphToShell {
      */
     exposeGlobals() {
         window.forceCanvasResize = () => this.app.canvasView?.resizeCanvas();
+        // The Examples tab renders each example's source as read-only blocks
+        // in its own workspace, and asks for this global to do it.
+        window.rebuildWorkspaceFromAqui = (code, workspace) =>
+            this.app.blocksEditor?.renderCodeToWorkspace(code, workspace) ?? false;
         // morphTo's inline script calls applyNewLayout() alongside a resize;
         // the engine has no separate layout pass, so a resize is the whole job.
         window.applyNewLayout = () => this.app.canvasView?.resizeCanvas();

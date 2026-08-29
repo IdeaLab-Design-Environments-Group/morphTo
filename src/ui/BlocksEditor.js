@@ -752,16 +752,35 @@ export class BlocksEditor extends Component {
     }
 
     syncFromCode(code) {
-        if (!this.workspace || !window.Blockly) return false;
+        if (!this.workspace) return false;
+        return this.renderCodeToWorkspace(code, this.workspace);
+    }
+
+    /**
+     * Build blocks for AQUI source into any workspace.
+     *
+     * Split out from {@link BlocksEditor#syncFromCode} so a read-only
+     * workspace elsewhere on the page — the Examples tab's preview — can
+     * render source without owning an editor. Event suppression only applies
+     * when rendering into this editor's own workspace; a foreign one has no
+     * change listener of ours attached.
+     *
+     * @param {string} code
+     * @param {Object} workspace - A Blockly workspace.
+     * @returns {boolean} Whether the source parsed and rendered.
+     */
+    renderCodeToWorkspace(code, workspace) {
+        if (!workspace || !window.Blockly) return false;
+        const isOwnWorkspace = workspace === this.workspace;
         const text = String(code ?? '').trim();
         if (!text) {
-            this._suppressWorkspaceEvents = true;
+            if (isOwnWorkspace) this._suppressWorkspaceEvents = true;
             window.Blockly.Events && window.Blockly.Events.disable();
             try {
-                this.workspace.clear();
+                workspace.clear();
             } finally {
                 window.Blockly.Events && window.Blockly.Events.enable();
-                this._releaseWorkspaceSuppressionSoon();
+                if (isOwnWorkspace) this._releaseWorkspaceSuppressionSoon();
             }
             return true;
         }
@@ -778,13 +797,13 @@ export class BlocksEditor extends Component {
             }
         });
 
-        this._suppressWorkspaceEvents = true;
+        if (isOwnWorkspace) this._suppressWorkspaceEvents = true;
         if (window.Blockly.Events) window.Blockly.Events.disable();
         try {
-            this.workspace.clear();
+            workspace.clear();
             let cursorY = 10;
             statements.forEach((stmt) => {
-                const block = this.stmtToBlock(stmt, this.workspace);
+                const block = this.stmtToBlock(stmt, workspace);
                 if (block) {
                     block.moveBy(10, cursorY);
                     cursorY += block.getHeightWidth().height + 25;
@@ -792,11 +811,11 @@ export class BlocksEditor extends Component {
             });
         } finally {
             if (window.Blockly.Events) window.Blockly.Events.enable();
-            this._releaseWorkspaceSuppressionSoon();
+            if (isOwnWorkspace) this._releaseWorkspaceSuppressionSoon();
         }
 
-        window.Blockly.svgResize(this.workspace);
-        this.workspace.render();
+        window.Blockly.svgResize(workspace);
+        workspace.render();
         return true;
     }
 
