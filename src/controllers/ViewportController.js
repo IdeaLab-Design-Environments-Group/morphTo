@@ -73,6 +73,15 @@ export class ViewportController {
         this.baseZoom = Math.max(0.01, Math.min(cssWidth, cssHeight) / 300);
         if (!this.hasInitializedZoom) {
             this.viewport.zoom = this.baseZoom;
+            // Put the world origin in the middle of the canvas rather than in
+            // its top-left corner, so a shape at (0,0) — and anything with
+            // negative coordinates — is on screen to begin with. Only for an
+            // untouched viewport: a pan, or one restored from a saved scene,
+            // is the user's and must survive a resize.
+            if (this.viewport.x === 0 && this.viewport.y === 0) {
+                this.viewport.x = cssWidth / 2;
+                this.viewport.y = cssHeight / 2;
+            }
             this.hasInitializedZoom = true;
         }
     }

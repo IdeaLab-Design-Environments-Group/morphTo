@@ -27,6 +27,14 @@ import {
     renderPointOnEdge
 } from '../../../geometry/edge/index.js';
 
+/**
+ * Selection palette, matching morphTo's canvas styling (see
+ * src/renderer/selectionSystem.mjs, which this pass replaces).
+ */
+const SELECTION_COLOR = '#FF5722';
+const HOVER_COLOR = '#FF6B35';
+const HANDLE_FILL = '#ffffff';
+
 export class SelectionPass {
     /**
      * Render selection indicator (multi-selection support)
@@ -56,7 +64,7 @@ export class SelectionPass {
                 ctx.save();
                 ctx.beginPath();
                 path.toCanvasPath(ctx);
-                ctx.strokeStyle = '#2aa3ff';
+                ctx.strokeStyle = SELECTION_COLOR;
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
@@ -64,7 +72,7 @@ export class SelectionPass {
                 const midX = (shapeForBounds.x1 + shapeForBounds.x2) / 2;
                 const midY = (shapeForBounds.y1 + shapeForBounds.y2) / 2;
                 ctx.fillStyle = '#fff';
-                ctx.strokeStyle = '#2aa3ff';
+                ctx.strokeStyle = SELECTION_COLOR;
                 ctx.lineWidth = 2 / frame.viewport.zoom;
 
                 ctx.beginPath();
@@ -150,7 +158,7 @@ export class SelectionPass {
             }
 
             // Draw hover outline
-            ctx.strokeStyle = '#0099ff';
+            ctx.strokeStyle = HOVER_COLOR;
             ctx.lineWidth = 2 / frame.viewport.zoom;
             ctx.setLineDash([]);
 
@@ -187,7 +195,7 @@ export class SelectionPass {
         const selectedEdges = frame.selection.getSelectedEdges();
         selectedEdges.forEach(edge => {
             renderEdgeSelected(ctx, edge, {
-                selectColor: '#ff6600',
+                selectColor: SELECTION_COLOR,
                 selectWidth: 3 / frame.viewport.zoom
             });
         });
@@ -197,7 +205,7 @@ export class SelectionPass {
         const hoveredEdgePosition = frame.selection.hoveredEdge?.position ?? null;
         if (hoveredEdge) {
             renderEdgeHover(ctx, hoveredEdge, {
-                hoverColor: '#0099ff',
+                hoverColor: HOVER_COLOR,
                 hoverWidth: 4 / frame.viewport.zoom
             });
 
@@ -205,8 +213,8 @@ export class SelectionPass {
             if (hoveredEdgePosition) {
                 renderPointOnEdge(ctx, hoveredEdgePosition, {
                     radius: 6 / frame.viewport.zoom,
-                    fillColor: '#0099ff',
-                    strokeColor: '#ffffff',
+                    fillColor: HOVER_COLOR,
+                    strokeColor: HANDLE_FILL,
                     strokeWidth: 2 / frame.viewport.zoom
                 });
             }
@@ -226,7 +234,7 @@ export class SelectionPass {
         const len = Math.min(16, Math.max(8, Math.min(w, h) * 0.12));
 
         ctx.save();
-        ctx.strokeStyle = '#2aa3ff';
+        ctx.strokeStyle = SELECTION_COLOR;
         ctx.lineWidth = 2;
         ctx.setLineDash([]);
 
@@ -267,8 +275,8 @@ export class SelectionPass {
         const radius = 6 / frame.viewport.zoom;
 
         ctx.save();
-        ctx.strokeStyle = '#2aa3ff';
-        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = SELECTION_COLOR;
+        ctx.fillStyle = HANDLE_FILL;
         ctx.lineWidth = 2 / frame.viewport.zoom;
 
         // Line from center to handle
@@ -301,8 +309,8 @@ export class SelectionPass {
         const h = bounds.height + padding * 2;
 
         const fontSize = 12 / frame.viewport.zoom;
-        const textColor = '#2aa3ff';
-        const lineColor = '#2aa3ff';
+        const textColor = SELECTION_COLOR;
+        const lineColor = SELECTION_COLOR;
         const textPadding = 4 / frame.viewport.zoom;
         const fmt = (v) => `${v.toFixed(2)} mm`;
 

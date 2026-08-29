@@ -1,8 +1,14 @@
 /**
- * @fileoverview GridPass — draws the screen-space background grid and the
- * top/left millimeter rulers.
+ * @fileoverview GridPass — paints the work surface, the screen-space grid,
+ * the millimetre rulers and the origin axes.
  *
- * Ported from CanvasRenderer.renderGrid() and CanvasRenderer.renderRulers().
+ * Ported from CanvasRenderer.renderGrid() and CanvasRenderer.renderRulers();
+ * the palette is morphTo's (see the SURFACE/GRID/RULER/AXIS constants), and
+ * the surface is painted here rather than left to the canvas element's CSS
+ * background. That is deliberate: a transparent canvas picks up the host
+ * page's `prefers-color-scheme: dark` rule and the drawing surface turns
+ * navy, which is not a theme choice a fabrication tool should make silently.
+ *
  * CanvasView only invokes this pass when interaction.showGrid is set, so the
  * old `if (showGrid) renderRulers()` tail of renderGrid collapses to "always
  * draw the grid, then the rulers".
@@ -10,14 +16,72 @@
  * @module views/canvas/passes/GridPass
  */
 
+/** Work surface. */
+const SURFACE_COLOR = '#FAFAFA';
+/** Grid lines. */
+const GRID_COLOR = 'rgba(200, 200, 200, 0.55)';
+/** Ruler gutter: fill, edge, ticks, labels. */
+const RULER_SIZE = 30;
+const RULER_BACKGROUND = '#f8f8f8';
+const RULER_BORDER = '#d0d0d0';
+const RULER_TICK = '#666666';
+const RULER_LABEL = '#333333';
+/** The x = 0 / y = 0 world axes. */
+const AXIS_COLOR = '#2196F3';
+
 export class GridPass {
     /**
-     * Draw the grid, then the rulers.
+     * Paint the surface, then the grid, rulers and axes.
      * @param {Object} frame - See CanvasView frame contract.
      */
     render(frame) {
+        this.renderSurface(frame);
         this.renderGrid(frame);
+        this.renderAxes(frame);
         this.renderRulers(frame);
+    }
+
+    /**
+     * Fill the whole canvas with the work-surface colour.
+     */
+    renderSurface(frame) {
+        const { ctx } = frame;
+        const dpr = window.devicePixelRatio || 1;
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = SURFACE_COLOR;
+        ctx.fillRect(0, 0, frame.vc.cssWidth, frame.vc.cssHeight);
+        ctx.restore();
+    }
+
+    /**
+     * Draw the x = 0 and y = 0 world axes, when they are on screen.
+     */
+    renderAxes(frame) {
+        const { ctx } = frame;
+        const dpr = window.devicePixelRatio || 1;
+        const width = frame.vc.cssWidth;
+        const height = frame.vc.cssHeight;
+        const origin = frame.vc.worldToScreen(0, 0);
+
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.strokeStyle = AXIS_COLOR;
+        ctx.lineWidth = 1;
+
+        if (origin.x >= 0 && origin.x <= width) {
+            ctx.beginPath();
+            ctx.moveTo(origin.x, 0);
+            ctx.lineTo(origin.x, height);
+            ctx.stroke();
+        }
+        if (origin.y >= 0 && origin.y <= height) {
+            ctx.beginPath();
+            ctx.moveTo(0, origin.y);
+            ctx.lineTo(width, origin.y);
+            ctx.stroke();
+        }
+        ctx.restore();
     }
 
     /**
@@ -38,7 +102,7 @@ export class GridPass {
         // Reset transform but apply DPR scaling for crisp rendering
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        ctx.strokeStyle = '#e0e0e0';
+        ctx.strokeStyle = GRID_COLOR;
         ctx.lineWidth = 0.5;
 
         // Calculate grid offset based on viewport pan (for visual alignment)
@@ -80,17 +144,27 @@ export class GridPass {
         const dpr = window.devicePixelRatio || 1;
         const width = frame.vc.cssWidth;
         const height = frame.vc.cssHeight;
-        const rulerSize = 24;
+        const rulerSize = RULER_SIZE;
         const majorStep = 10;
         const minorStep = 1;
 
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillStyle = RULER_BACKGROUND;
         ctx.fillRect(0, 0, width, rulerSize);
         ctx.fillRect(0, 0, rulerSize, height);
 
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        // Gutter edge, so the rulers read as a frame around the surface.
+        ctx.strokeStyle = RULER_BORDER;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, rulerSize + 0.5);
+        ctx.lineTo(width, rulerSize + 0.5);
+        ctx.moveTo(rulerSize + 0.5, 0);
+        ctx.lineTo(rulerSize + 0.5, height);
+        ctx.stroke();
+
+        ctx.strokeStyle = RULER_TICK;
         ctx.lineWidth = 1;
 
         const worldLeft = frame.vc.screenToWorld(0, 0).x;
@@ -108,7 +182,7 @@ export class GridPass {
             ctx.lineTo(screenX, rulerSize - tick);
             ctx.stroke();
             if (isMajor) {
-                ctx.fillStyle = '#444';
+                ctx.fillStyle = RULER_LABEL;
                 ctx.font = '10px sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'top';
@@ -129,7 +203,7 @@ export class GridPass {
                 ctx.save();
                 ctx.translate(2, screenY + 2);
                 ctx.rotate(-Math.PI / 2);
-                ctx.fillStyle = '#444';
+                ctx.fillStyle = RULER_LABEL;
                 ctx.font = '10px sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'top';

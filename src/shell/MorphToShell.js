@@ -150,7 +150,11 @@ export class MorphToShell {
         const output = this.el('error-output');
         const count = this.el('error-count');
         const panel = this.el('error-panel');
-        if (count) count.textContent = String(errors.length);
+        if (count) {
+            count.textContent = String(errors.length);
+            // morphTo hides the badge at zero.
+            count.classList.toggle('visible', errors.length > 0);
+        }
         if (output) {
             output.textContent = errors.length ? errors.join('\n') : '// No errors.';
         }
