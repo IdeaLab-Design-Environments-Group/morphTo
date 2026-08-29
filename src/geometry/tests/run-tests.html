@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Library Tests</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 {
+            color: #00d9ff;
+            border-bottom: 2px solid #00d9ff;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #ff6b6b;
+            margin-top: 30px;
+        }
+        .instructions {
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .instructions code {
+            background: #0f3460;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #00d9ff;
+        }
+        #status {
+            font-size: 1.5em;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        #status.loading {
+            background: #16213e;
+            color: #ffd93d;
+        }
+        #status.success {
+            background: #1b4332;
+            color: #95d5b2;
+        }
+        #status.error {
+            background: #4a1515;
+            color: #ff6b6b;
+        }
+        .phase {
+            margin-top: 20px;
+            padding: 10px 15px;
+            background: #0f3460;
+            border-radius: 4px;
+            color: #00d9ff;
+            font-weight: bold;
+        }
+        .module-list {
+            list-style: none;
+            padding: 0;
+        }
+        .module-list li {
+            padding: 10px 15px;
+            margin: 5px 0;
+            background: #16213e;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .module-list .status {
+            font-weight: bold;
+        }
+        .module-list .pending { color: #ffd93d; }
+        .module-list .passed { color: #95d5b2; }
+        .module-list .failed { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <h1>Geometry Library Tests</h1>
+
+    <div class="instructions">
+        <p><strong>Instructions:</strong> Open the browser console (<code>F12</code> or <code>Cmd+Option+I</code>) to see detailed test output.</p>
+        <p>Tests use <code>console.log</code> for pass/fail reporting.</p>
+    </div>
+
+    <div id="status" class="loading">Running tests...</div>
+
+    <h2>Modules</h2>
+
+    <div class="phase">Phase 1: Foundation</div>
+    <ul class="module-list">
+        <li>
+            <span>constants.js</span>
+            <span id="constants-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>math.js</span>
+            <span id="math-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>util.js</span>
+            <span id="util-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 2: Core Primitives</div>
+    <ul class="module-list">
+        <li>
+            <span>Vec.js</span>
+            <span id="vec-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Matrix.js</span>
+            <span id="matrix-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 3: Support Types</div>
+    <ul class="module-list">
+        <li>
+            <span>BoundingBox.js</span>
+            <span id="boundingbox-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Color.js</span>
+            <span id="color-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Style.js</span>
+            <span id="style-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 4: Geometry Base</div>
+    <ul class="module-list">
+        <li>
+            <span>Anchor.js</span>
+            <span id="anchor-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 5: Curve Mathematics</div>
+    <ul class="module-list">
+        <li>
+            <span>bezier.js</span>
+            <span id="bezier-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Segment.js</span>
+            <span id="segment-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 6: Path System</div>
+    <ul class="module-list">
+        <li>
+            <span>Path.js</span>
+            <span id="path-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 7: Complex Geometry</div>
+    <ul class="module-list">
+        <li>
+            <span>Shape.js</span>
+            <span id="shape-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Group.js</span>
+            <span id="group-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>Axis.js</span>
+            <span id="axis-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 8: I/O & Rendering</div>
+    <ul class="module-list">
+        <li>
+            <span>canvas.js</span>
+            <span id="canvas-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>svg.js</span>
+            <span id="svg-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>units.js</span>
+            <span id="units-status" class="status pending">pending</span>
+        </li>
+        <li>
+            <span>random.js</span>
+            <span id="random-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 9: PathKit Stub</div>
+    <ul class="module-list">
+        <li>
+            <span>pathkit.js</span>
+            <span id="pathkit-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <div class="phase">Phase 10: Entry Point</div>
+    <ul class="module-list">
+        <li>
+            <span>index.js</span>
+            <span id="index-status" class="status pending">pending</span>
+        </li>
+    </ul>
+
+    <script type="module">
+        const statusEl = document.getElementById('status');
+
+        let allPassed = true;
+
+        async function runTest(name, statusId, importPath) {
+            const statusEl = document.getElementById(statusId);
+            try {
+                await import(importPath);
+                statusEl.textContent = 'passed';
+                statusEl.className = 'status passed';
+                return true;
+            } catch (e) {
+                console.error(`${name} tests failed:`, e);
+                statusEl.textContent = 'failed';
+                statusEl.className = 'status failed';
+                return false;
+            }
+        }
+
+        async function runTests() {
+            console.log('='.repeat(60));
+            console.log('GEOMETRY LIBRARY TESTS');
+            console.log('='.repeat(60));
+
+            // Phase 1: Foundation
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 1: FOUNDATION');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('constants.js', 'constants-status', './constants.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('math.js', 'math-status', './math.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('util.js', 'util-status', './util.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 2: Core Primitives
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 2: CORE PRIMITIVES');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('Vec.js', 'vec-status', './Vec.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Matrix.js', 'matrix-status', './Matrix.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 3: Support Types
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 3: SUPPORT TYPES');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('BoundingBox.js', 'boundingbox-status', './BoundingBox.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Color.js', 'color-status', './Color.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Style.js', 'style-status', './Style.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 4: Geometry Base
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 4: GEOMETRY BASE');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('Anchor.js', 'anchor-status', './Anchor.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 5: Curve Mathematics
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 5: CURVE MATHEMATICS');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('bezier.js', 'bezier-status', './bezier.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Segment.js', 'segment-status', './Segment.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 6: Path System
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 6: PATH SYSTEM');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('Path.js', 'path-status', './Path.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 7: Complex Geometry
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 7: COMPLEX GEOMETRY');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('Shape.js', 'shape-status', './Shape.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Group.js', 'group-status', './Group.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('Axis.js', 'axis-status', './Axis.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 8: I/O & Rendering
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 8: I/O & RENDERING');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('canvas.js', 'canvas-status', './canvas.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('svg.js', 'svg-status', './svg.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('units.js', 'units-status', './units.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            if (!await runTest('random.js', 'random-status', './random.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 9: PathKit Stub
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 9: PATHKIT STUB');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('pathkit.js', 'pathkit-status', './pathkit.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Phase 10: Entry Point
+            console.log('\n' + '='.repeat(60));
+            console.log('PHASE 10: ENTRY POINT');
+            console.log('='.repeat(60) + '\n');
+
+            if (!await runTest('index.js', 'index-status', './index.test.js')) {
+                allPassed = false;
+            }
+            console.log('');
+
+            // Final status
+            console.log('='.repeat(60));
+
+            if (allPassed) {
+                console.log('ALL TESTS PASSED');
+                statusEl.textContent = 'All tests passed!';
+                statusEl.className = 'success';
+            } else {
+                console.log('SOME TESTS FAILED - Check console for details');
+                statusEl.textContent = 'Some tests failed - check console';
+                statusEl.className = 'error';
+            }
+
+            console.log('='.repeat(60));
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

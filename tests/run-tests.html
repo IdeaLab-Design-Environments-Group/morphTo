@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otto Unit Tests</title>
+    <style>
+        body { font-family: 'SF Mono', Menlo, Consolas, monospace; background: rgb(15, 23, 42); color: rgb(226, 232, 240); padding: 24px; }
+        h1 { font-size: 18px; }
+        #summary { font-size: 16px; margin: 12px 0; padding: 10px 14px; border-radius: 6px; }
+        #summary.pass { background: rgb(20, 83, 45); }
+        #summary.fail { background: rgb(127, 29, 29); }
+        pre { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
+        .pass-line { color: rgb(134, 239, 172); }
+        .fail-line { color: rgb(252, 165, 165); }
+        .module-line { color: rgb(147, 197, 253); font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Otto Unit Tests</h1>
+    <p>Serve this directory over HTTP (e.g. <code>python3 -m http.server</code> from the repo root) — file:// will not work with ES modules.</p>
+    <div id="summary">Running…</div>
+    <pre id="output"></pre>
+    <script type="module">
+        const output = document.getElementById('output');
+        const summary = document.getElementById('summary');
+
+        function append(text, cls) {
+            const span = document.createElement('span');
+            span.textContent = text + '\n';
+            if (cls) span.className = cls;
+            output.appendChild(span);
+        }
+
+        const { TEST_MODULES } = await import('./manifest.js');
+        for (const path of TEST_MODULES) {
+            append(path, 'module-line');
+            await import(path);
+        }
+
+        const { runAll } = await import('./harness.js');
+        const results = await runAll({
+            log: (msg) => append(msg, 'pass-line'),
+            error: (msg) => append(msg, 'fail-line')
+        });
+
+        summary.textContent = `${results.passed} passed, ${results.failed} failed`;
+        summary.className = results.failed > 0 ? 'fail' : 'pass';
+    </script>
+</body>
+</html>

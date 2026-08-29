@@ -1,5 +1,11 @@
 {
+  "name": "morphto",
+  "private": true,
   "type": "module",
+  "scripts": {
+    "test": "node tests/run-node.js",
+    "serve": "python3 -m http.server 8080"
+  },
   "exports": {
     "./lexer": "./src/lexer.mjs",
     "./envrionment": "./src/environment.mjs",
