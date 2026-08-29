@@ -55,7 +55,10 @@ export class KeyboardShortcutController {
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
         if (el.isContentEditable) return true;
         if (el.closest('.CodeMirror')) return true;
-        if (el.closest('.blockly-workspace') || el.closest('#blockly-container')) return true;
+        // #blocklyDiv is the Blockly inject target in every host: morphTo ships
+        // it in index.html and BlocksEditor adopts it, and a bare host gets the
+        // same element created. (#blockly-container is Otto's pane id.)
+        if (el.closest('#blocklyDiv') || el.closest('#blockly-container')) return true;
         return false;
     }
 

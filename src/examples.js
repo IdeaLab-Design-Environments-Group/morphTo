@@ -108,17 +108,34 @@ document.addEventListener('DOMContentLoaded', () => {
       return ws;
     }
 
+    function showHint(container, text) {
+      const hint = document.createElement('div');
+      hint.style.padding = '12px';
+      hint.style.fontFamily = 'monospace';
+      hint.style.fontSize = '12px';
+      hint.textContent = text;
+      container.appendChild(hint);
+    }
+
+    // The shell's rebuildWorkspaceFromAqui reports a failed parse by returning
+    // false rather than throwing, so a bare try/catch would leave the viewer
+    // showing an empty grid with no explanation.
     function renderAquiToWorkspace(aquiText, ws) {
       if (typeof window.rebuildWorkspaceFromAqui !== 'function') {
         console.error('rebuildWorkspaceFromAqui is not available on window; the shell should have installed it.');
-        return;
+        return false;
       }
       try {
-        window.rebuildWorkspaceFromAqui(aquiText, ws);
+        if (window.rebuildWorkspaceFromAqui(aquiText, ws) === false) {
+          console.error('AQUI → Blocks render failed: source did not parse.');
+          return false;
+        }
         if (typeof ws.zoomToFit === 'function') ws.zoomToFit();
         Blockly.svgResize(ws);
+        return true;
       } catch (e) {
         console.error('AQUI → Blocks render failed:', e);
+        return false;
       }
     }
 
@@ -183,16 +200,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create read-only workspace + render AQUI → Blocks
         currentWorkspace = createReadOnlyBlockly(container);
-        if (aquiText) {
-          renderAquiToWorkspace(aquiText, currentWorkspace);
-        } else {
-          // If fetch failed, still show an empty workspace with a hint
-          const hint = document.createElement('div');
-          hint.style.padding = '12px';
-          hint.style.fontFamily = 'monospace';
-          hint.style.fontSize = '12px';
-          hint.textContent = 'Unable to load blocks.';
-          container.appendChild(hint);
+        // If the load failed, or the source did not render, still show an
+        // empty workspace with a hint rather than a blank panel.
+        if (!aquiText || !renderAquiToWorkspace(aquiText, currentWorkspace)) {
+          showHint(container, 'Unable to load blocks.');
         }
 
         // Toggle views - hide menu, show detail

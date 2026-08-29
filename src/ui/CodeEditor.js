@@ -431,6 +431,24 @@ export class CodeEditor extends Component {
                 lines.push(`    ${prop}: ${num}`);
             }
 
+            // Non-bindable scalars (a Text shape's string, a font family, a
+            // fill colour) are not numbers, so the loop above drops them and
+            // the content is lost on the next canvas -> code sync. Emit them
+            // when they differ from the schema default; a value equal to the
+            // default is restored at construction, so omitting it is lossless.
+            for (const [prop, descriptor] of Object.entries(shape.constructor.fullSchema ?? {})) {
+                if (descriptor.bindable) continue;
+                if (!['string', 'color', 'boolean'].includes(descriptor.type)) continue;
+
+                const v = shape[prop];
+                if (v === undefined || v === null) continue;
+
+                const fallback = descriptor.default;
+                if (typeof fallback !== 'function' && v === fallback) continue;
+
+                lines.push(`    ${prop}: ${descriptor.type === 'boolean' ? (v ? 'true' : 'false') : JSON.stringify(String(v))}`);
+            }
+
             lines.push('}');
             lines.push('');
             const endLine = lines.length - 1; // line after blank

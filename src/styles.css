@@ -1713,10 +1713,12 @@ body {
   margin-bottom: 8px;
 }
 
-/* The only rule the constraint list needs: morphTo styled its rows inline
-   (constraints/ui.mjs:159-191) and ConstraintController reproduces that. This
-   pair survives solely because ParametersMenu reuses the class for the delete
-   button on its parameter meta row (ui/ParametersMenu.js:344-346). */
+/* Misleadingly named: the constraint list does NOT use this. morphTo styled
+   its rows inline (constraints/ui.mjs:159-191) and ConstraintController
+   reproduces that, so the list needs no rule at all. The pair exists solely
+   for ParametersMenu, which reuses the class for the delete button on its
+   parameter meta row (ui/ParametersMenu.js:344-346) -- that is its only
+   consumer, so do not remove it as constraint leftovers. */
 .constraint-remove {
   border: none;
   background: transparent;
@@ -1778,3 +1780,27 @@ body {
 .palette-grid .palette-item:nth-child(15) { animation-delay: 0.75s; }
 .palette-grid .palette-item:nth-child(16) { animation-delay: 0.8s; }
 .palette-grid .palette-item:nth-child(17) { animation-delay: 0.85s; }
+
+/* ── Constraints popup ─────────────────────────────────────────────────────
+   morphTo's constraints panel is its own popup, not a .parameters-container:
+   ui.mjs:44-49 built it as a fixed, bottom-right, white, monospace card wide
+   enough for the builder's paired selects. Those styles were inline on an
+   element ui.mjs created; the panel lives in index.html here, so they become
+   a rule. Toggled by ConstraintController.togglePanel, which sets display. */
+#constraints-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 64px;
+  min-width: 400px;
+  max-width: 460px;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.15);
+  padding: 12px;
+  font-family: monospace;
+  display: none;
+  max-height: 70vh;
+  overflow-y: auto;
+}

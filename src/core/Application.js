@@ -423,7 +423,11 @@ export class Application {
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
         if (el.isContentEditable) return true;
         if (el.closest('.CodeMirror')) return true;
-        if (el.closest('.blockly-workspace') || el.closest('#blockly-container')) return true;
+        // The blocks pane's id is host-supplied (morphTo calls it
+        // #blockly-editor-container), so resolve it through the element-id map
+        // rather than hardcoding Otto's own id.
+        const blocklyId = this.elementIds?.blockly ?? Application.DEFAULT_ELEMENT_IDS.blockly;
+        if (el.closest('.blockly-workspace') || el.closest(`#${blocklyId}`)) return true;
         return false;
     }
 

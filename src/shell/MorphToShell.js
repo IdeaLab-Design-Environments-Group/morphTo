@@ -237,6 +237,17 @@ export class MorphToShell {
 
         button.addEventListener('click', () => {
             const showBlocks = blocksPane.style.display === 'none';
+            if (showBlocks) {
+                // Rebuild the workspace from the source BEFORE revealing the
+                // pane, i.e. while claimEditorAuthority() still reports the
+                // blocks editor as inactive and blocks -> code writes are
+                // dropped. A workspace shown stale becomes authoritative the
+                // moment Blockly emits its first change event, and an empty
+                // one (nothing has synced it — the source came from autosave,
+                // or the connector's debounce has not fired) would regenerate
+                // straight over the code the user actually wrote.
+                this.app.blocksEditor?.syncFromCode?.(this.app.codeEditor?.getCode() ?? '');
+            }
             blocksPane.style.display = showBlocks ? 'flex' : 'none';
             textPane.style.display = showBlocks ? 'none' : 'flex';
             button.textContent = showBlocks ? 'Text' : 'Blocks';
@@ -337,9 +348,12 @@ export class MorphToShell {
             return;
         }
 
+        // Pass the store, not just the shapes: the exporters look up edge
+        // joinery by "<shapeId>:<pathIndex>:<edgeIndex>" so a jointed edge
+        // exports as its toothed cut profile instead of a plain outline.
         const { content, mime } = format === 'dxf'
-            ? { content: shapesToDXF(shapes), mime: 'application/dxf' }
-            : { content: shapesToSVG(shapes), mime: 'image/svg+xml' };
+            ? { content: shapesToDXF(shapes, { shapeStore: store }), mime: 'application/dxf' }
+            : { content: shapesToSVG(shapes, { shapeStore: store }), mime: 'image/svg+xml' };
 
         const name = (this.app.tabManager?.getActiveTab?.()?.name || 'drawing')
             .replace(/[^\w.-]+/g, '_');

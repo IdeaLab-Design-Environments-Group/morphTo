@@ -128,6 +128,12 @@ export class BlocksEditor extends Component {
         this.context = context;
         this.codeRunner = new CodeRunner({ shapeStore, parameterStore });
         this.workspace = null;
+        /**
+         * The element Blockly was injected into — morphTo's own `#blocklyDiv`
+         * when the page supplies it.
+         * @type {?HTMLElement}
+         */
+        this.workspaceElement = null;
         this._blocksDefined = false;
         this._resizeHandler = null;
         this._resizeObserver = null;
@@ -142,40 +148,36 @@ export class BlocksEditor extends Component {
         this._loopVars = new Set();
     }
 
+    /**
+     * Render the blocks pane.
+     *
+     * morphTo's blocks pane is *only* the workspace: it has no toolbar of its
+     * own — Run is the footer button, which the shell owns. So this renders no
+     * chrome, exactly as {@link CodeEditor#render} renders no chrome around the
+     * textarea.
+     *
+     * morphTo's markup already ships `<div id="blocklyDiv">` (sized 100% x 100%)
+     * inside `#blockly-editor-container`, so it is adopted rather than replaced;
+     * the fallback path (tests, or any host without the markup) creates the same
+     * element, sized the same way — Blockly injects into whatever box it is
+     * given, and a zero-height box renders an invisible workspace.
+     */
     render() {
         if (!this.container) return;
 
-        this.container.innerHTML = '';
-
-        const host = this.createElement('div', { class: 'blockly-host' });
-        const toolbar = this.createElement('div', { class: 'blockly-toolbar' });
-
-        const runButton = this.createElement('button', {
-            class: 'blockly-run',
-            type: 'button'
-        }, 'Run');
-        runButton.addEventListener('click', () => this.runBlocks());
-
-        const clearButton = this.createElement('button', {
-            class: 'blockly-clear',
-            type: 'button'
-        }, 'Clear');
-        clearButton.addEventListener('click', () => this.clearBlocks());
-
-        toolbar.appendChild(runButton);
-        toolbar.appendChild(clearButton);
-
-        const workspaceDiv = this.createElement('div', {
-            class: 'blockly-workspace',
-            id: 'blockly-workspace'
-        });
-
-        host.appendChild(toolbar);
-        host.appendChild(workspaceDiv);
-        this.container.appendChild(host);
+        // `:scope >` matters: Blockly fills the inject target with its own
+        // divs, and a bare `querySelector('div')` would adopt one of those on a
+        // re-render.
+        let workspaceDiv = this.container.querySelector(':scope > #blocklyDiv');
+        if (!workspaceDiv) {
+            workspaceDiv = this.createElement('div', { id: 'blocklyDiv' });
+            workspaceDiv.setAttribute('style', 'height:100%; width:100%;');
+            this.container.appendChild(workspaceDiv);
+        }
+        this.workspaceElement = workspaceDiv;
 
         this.initBlockly(workspaceDiv);
-        
+
         // Setup bidirectional sync after workspace is initialized
         this.setupCanvasSync();
     }
@@ -982,6 +984,34 @@ export class BlocksEditor extends Component {
             return b;
         }
 
+        // Unary minus. Without this every negative literal fell through to the
+        // warn below and rendered as 0 -- silently wrong, because the block
+        // still appears. A negated literal folds into the number itself;
+        // anything else becomes (0 - operand), as morphTo did (app.js:512).
+        if (expr.type === 'unary_op' && expr.operator === 'minus') {
+            const operand = expr.operand || expr.argument;
+
+            if (operand && operand.type === 'number') {
+                const b = ws.newBlock('math_number');
+                b.setShadow(true);
+                b.setFieldValue(String(-operand.value), 'NUM');
+                b.initSvg(); b.render();
+                return b;
+            }
+
+            const sub = ws.newBlock('math_arithmetic');
+            sub.setFieldValue('MINUS', 'OP');
+            const zero = ws.newBlock('math_number');
+            zero.setShadow(true);
+            zero.setFieldValue('0', 'NUM');
+            zero.initSvg(); zero.render();
+            sub.getInput('A').connection.connect(zero.outputConnection);
+            const kid = this.exprToBlock(operand, ws);
+            if (kid) sub.getInput('B').connection.connect(kid.outputConnection);
+            sub.initSvg(); sub.render();
+            return sub;
+        }
+
         console.warn('[BlocksEditor] exprToBlock: unhandled node', expr);
         return null;
     }
@@ -1196,6 +1226,13 @@ export class BlocksEditor extends Component {
         // Canvas repaints via the SHAPE_ADDED/REMOVED events the run emitted.
     }
 
+    /**
+     * Empty the workspace and the canvas it produced.
+     *
+     * Otto's blocks pane offered this as a toolbar button; morphTo's has no
+     * toolbar, so the behaviour stays reachable as a public method (as
+     * CodeEditor's clearCode/showHelp do) with nothing rendered for it.
+     */
     clearBlocks() {
         if (this.workspace && window.Blockly?.Events) {
             this._suppressWorkspaceEvents = true;
