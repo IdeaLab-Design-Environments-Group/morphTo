@@ -1872,3 +1872,51 @@ body {
 .zoom-btn-reset {
   display: none;
 }
+
+/* Constraint list popup, sharing the parameters popup's styling. */
+.constraints-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.constraint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-family: monospace;
+  font-size: 11px;
+  border-bottom: 1px solid #eee;
+}
+
+.constraint-row:last-child {
+  border-bottom: none;
+}
+
+.constraint-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.constraint-remove {
+  border: none;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.constraint-remove:hover {
+  color: #FF5722;
+}
+
+.constraints-empty {
+  color: #888;
+  font-size: 11px;
+  font-style: italic;
+}

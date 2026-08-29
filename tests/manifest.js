@@ -10,6 +10,8 @@ export const TEST_MODULES = [
     './unit/commands.test.js',
     './unit/depth.test.js',
     './unit/editor-sync.test.js',
+    './unit/export.test.js',
+    './unit/constraints.test.js',
     './unit/plugin-lifecycle.test.js',
     './unit/coach.test.js',
     './unit/joinery.test.js'

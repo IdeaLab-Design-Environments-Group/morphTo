@@ -15,6 +15,10 @@
  * @module shell/MorphToShell
  */
 
+import { ConstraintController } from '../constraints/ConstraintController.js';
+import { shapesToSVG } from '../export/svgExport.js';
+import { shapesToDXF } from '../export/dxfExport.js';
+
 /**
  * Element ids Otto's Application mounts into, mapped onto morphTo's markup.
  * Passed to Application.init(); see Application.DEFAULT_ELEMENT_IDS.
@@ -42,6 +46,8 @@ export class MorphToShell {
         this.app = app;
         /** Export handlers, filled in by registerExporters(). */
         this.exporters = new Map();
+        /** @type {?ConstraintController} */
+        this.constraints = null;
     }
 
     /** Wire every piece of morphTo chrome. Safe to call once, after app.init(). */
@@ -56,6 +62,8 @@ export class MorphToShell {
         this.wireShapePalette();
         this.wireInspector();
         this.wireExportMenu();
+        this.registerExporters();
+        this.setupConstraints();
         this.wireEditorTabActivation();
     }
 
@@ -108,6 +116,12 @@ export class MorphToShell {
         if (!codeEditor) return null;
         const result = codeEditor.runCode();
         this.showErrors(result && !result.success ? [result.error] : []);
+        if (result?.success && this.constraints) {
+            // A `constraints { }` block in the source is solved here — the
+            // language records them, the solver resolves them.
+            this.constraints.syncFromRun(result);
+            this.renderConstraints();
+        }
         return result;
     }
 
@@ -216,6 +230,96 @@ export class MorphToShell {
      */
     registerExporter(id, handler) {
         this.exporters.set(id, handler);
+    }
+
+    /**
+     * Stand up the constraint solver and let the canvas draw its markers.
+     */
+    setupConstraints() {
+        this.constraints = new ConstraintController(this.app.context, {
+            onChanged: () => this.app.canvasView?.render()
+        });
+        this.app.canvasView?.setConstraintSource({
+            getConstraints: () => this.constraints.engine.getConstraintSnapshot(),
+            getGeometry: (c) => this.constraints.engine.getConstraintGeometry(c)
+        });
+
+        const panel = this.el('constraints-panel');
+        this.el('constraints-button')?.addEventListener('click', () => {
+            if (!panel) return;
+            const open = panel.style.display === 'block';
+            panel.style.display = open ? 'none' : 'block';
+            if (!open) this.renderConstraints();
+        });
+    }
+
+    /** Rebuild the constraint list in the popup. */
+    renderConstraints() {
+        const list = this.el('constraints-list');
+        if (!list || !this.constraints) return;
+        list.innerHTML = '';
+
+        const entries = this.constraints.list();
+        if (entries.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'constraints-empty';
+            empty.textContent = 'No constraints. Declare them in a constraints { } block.';
+            list.appendChild(empty);
+            return;
+        }
+
+        for (const { id, label } of entries) {
+            const row = document.createElement('div');
+            row.className = 'constraint-row';
+
+            const text = document.createElement('span');
+            text.className = 'constraint-label';
+            text.textContent = label;
+            row.appendChild(text);
+
+            const remove = document.createElement('button');
+            remove.className = 'constraint-remove';
+            remove.type = 'button';
+            remove.title = 'Remove constraint';
+            remove.textContent = '×';
+            remove.addEventListener('click', () => {
+                this.constraints.remove(id);
+                this.renderConstraints();
+            });
+            row.appendChild(remove);
+
+            list.appendChild(row);
+        }
+    }
+
+    /**
+     * SVG and DXF export, off the shape store rather than the interpreter, so
+     * shapes drawn on the canvas export exactly like ones written in AQUI.
+     */
+    registerExporters() {
+        this.registerExporter('export-svg', () => this.exportAs('svg'));
+        this.registerExporter('export-dxf', () => this.exportAs('dxf'));
+    }
+
+    /**
+     * @param {'svg'|'dxf'} format
+     */
+    exportAs(format) {
+        const store = this.app.context?.shapeStore;
+        const shapes = store ? store.getResolved() : [];
+        if (!shapes.length) {
+            this.app.showNotification('Nothing to export — the canvas is empty', 'error');
+            return;
+        }
+
+        const { content, mime } = format === 'dxf'
+            ? { content: shapesToDXF(shapes), mime: 'application/dxf' }
+            : { content: shapesToSVG(shapes), mime: 'image/svg+xml' };
+
+        const name = (this.app.tabManager?.getActiveTab?.()?.name || 'drawing')
+            .replace(/[^\w.-]+/g, '_');
+        this.app.fileManager.createDownload(content, `${name}.${format}`, mime);
+        this.app.showNotification(`Exported ${shapes.length} shape(s) as ${format.toUpperCase()}`, 'success');
     }
 
     /** Export ▼ menu: open/close, and dispatch to registered exporters. */

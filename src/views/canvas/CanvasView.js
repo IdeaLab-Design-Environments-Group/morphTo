@@ -42,6 +42,7 @@ import { GridPass } from './passes/GridPass.js';
 import { ShapesPass } from './passes/ShapesPass.js';
 import { JoineryPass } from './passes/JoineryPass.js';
 import { SelectionPass } from './passes/SelectionPass.js';
+import { ConstraintsPass } from './passes/ConstraintsPass.js';
 import { SelectionRectPass } from './passes/SelectionRectPass.js';
 import { DragPreviewPass } from './passes/DragPreviewPass.js';
 import { PathDrawPass } from './passes/PathDrawPass.js';
@@ -71,6 +72,9 @@ export class CanvasView extends Component {
             grid: new GridPass(),
             shapes: new ShapesPass(),
             joinery: new JoineryPass(),
+            // Inert until a constraint source is attached; see
+            // setConstraintSource().
+            constraints: new ConstraintsPass(null),
             selection: new SelectionPass(),
             selectionRect: new SelectionRectPass(),
             dragPreview: new DragPreviewPass(),
@@ -90,6 +94,17 @@ export class CanvasView extends Component {
      * unlike the old renderer there is no local selection bookkeeping here —
      * every event is purely "something changed, repaint".
      */
+    /**
+     * Attach the constraint set to draw. Passing null (the default) leaves the
+     * pass inert, so a host without a solver pays nothing.
+     *
+     * @param {?{getConstraints: () => Array<Object>, getGeometry: Function}} source
+     */
+    setConstraintSource(source) {
+        this.passes.constraints.source = source;
+        this.render();
+    }
+
     subscribeToEvents() {
         const repaint = () => this.requestRender();
         this.subscribe(EVENTS.SHAPE_ADDED, repaint);
@@ -214,6 +229,7 @@ export class CanvasView extends Component {
 
         this.passes.shapes.render(frame);
         this.passes.joinery.render(frame);
+        this.passes.constraints.render(frame);
         this.passes.selection.render(frame);
         this.passes.selectionRect.render(frame);
         this.passes.dragPreview.render(frame);

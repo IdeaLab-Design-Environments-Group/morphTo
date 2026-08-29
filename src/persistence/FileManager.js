@@ -83,9 +83,10 @@ export class FileManager {
      * Create a download
      * @param {string} content - File content
      * @param {string} filename - Filename
+     * @param {string} [mimeType] - Defaults to JSON, the scene format.
      */
-    createDownload(content, filename) {
-        const blob = new Blob([content], { type: 'application/json' });
+    createDownload(content, filename, mimeType = 'application/json') {
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
