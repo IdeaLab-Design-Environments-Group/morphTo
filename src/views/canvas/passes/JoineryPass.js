@@ -6,9 +6,10 @@
  * draws the interactive depth handle while the owning shape is selected.
  *
  * Ported from CanvasRenderer.renderEdgeJoinery(), renderFingerJoinery(), and
- * renderJoineryHandles(). Tab count/depth/profile maths lives in the pure
- * {@link module:models/joinery} module (`jointRenderPlan`); this pass only
- * turns a plan into strokes.
+ * renderJoineryHandles(). ALL the maths — tab count/depth/profile, the edge
+ * frame with its outward normal, the rotation of edge endpoints, and the tooth
+ * outline itself — lives in the pure {@link module:models/joinery} module,
+ * which the exporters read too; this pass only turns those points into strokes.
  *
  * This pass is the ONE sanctioned exception to "passes don't write": it
  * REBUILDS `frame.interaction.joineryHandles` (the hit-test cache) as it
@@ -16,7 +17,9 @@
  *
  * @module views/canvas/passes/JoineryPass
  */
-import { jointRenderPlan } from '../../../models/joinery.js';
+import {
+    jointRenderPlan, rotatePointAbout, edgeJointFrame, buildToothOutline
+} from '../../../models/joinery.js';
 import { SHAPE_STYLE } from './ShapesPass.js';
 
 /** Idle joinery-handle colour — REF renderer/shapeRenderer.mjs:162 ('#2196F3'). */
@@ -75,16 +78,7 @@ export class JoineryPass {
      * @returns {{x:number,y:number}}
      */
     rotatePoint(p, center, rotationDeg) {
-        if (!center || !rotationDeg) return { x: p.x, y: p.y };
-        const a = (rotationDeg * Math.PI) / 180;
-        const cos = Math.cos(a);
-        const sin = Math.sin(a);
-        const dx = p.x - center.x;
-        const dy = p.y - center.y;
-        return {
-            x: center.x + dx * cos - dy * sin,
-            y: center.y + dx * sin + dy * cos
-        };
+        return rotatePointAbout(p, center, rotationDeg);
     }
 
     /**
@@ -113,29 +107,13 @@ export class JoineryPass {
         const p1 = this.rotatePoint(rawP1, center, rotation);
         const p2 = this.rotatePoint(rawP2, center, rotation);
 
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const length = Math.hypot(dx, dy);
-        if (length < 0.001) return;
-
-        const ux = dx / length;
-        const uy = dy / length;
-        let nx = -uy;
-        let ny = ux;
-
-        // Orient the normal to point OUTWARD (away from the shape centre); the
-        // joint is then cut INWARD from there. The centre is the rotation pivot,
-        // so it is invariant and remains valid after the endpoint rotation.
-        if (center) {
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2;
-            const vx = midX - center.x;
-            const vy = midY - center.y;
-            if (vx * nx + vy * ny < 0) {
-                nx = -nx;
-                ny = -ny;
-            }
-        }
+        // Edge frame with the normal oriented OUTWARD (away from the shape
+        // centre); the joint is then cut INWARD from there. The centre is the
+        // rotation pivot, so it is invariant and remains valid after the
+        // endpoint rotation above.
+        const edgeFrame = edgeJointFrame(p1, p2, center);
+        if (!edgeFrame) return;
+        const { ux, uy, nx, ny, length } = edgeFrame;
 
         // Joinery is CUT INTO the panel, not added on top: notches go inward
         // (toward the centre), so the piece keeps its outer footprint.
@@ -185,51 +163,14 @@ export class JoineryPass {
     }
 
     /**
-     * Build the toothed edge outline as world-space points: an open polyline
-     * from one corner to the other, on the boundary along tabs and cut inward
-     * along notches (trapezoidal for a dovetail). Pure — testable without a
-     * canvas.
+     * Build the toothed edge outline as world-space points. Delegates to the
+     * pure {@link module:models/joinery} geometry the exporters share.
      *
-     * @param {Object} p
-     * @param {{x:number,y:number}} p.p1  Edge start (already rotated).
-     * @param {number} p.ux  @param {number} p.uy  Unit vector along the edge.
-     * @param {number} p.nx  @param {number} p.ny  Outward unit normal.
-     * @param {ReturnType<import('../../../models/joinery.js').jointRenderPlan>} p.plan
+     * @param {Object} p  See `buildToothOutline` in models/joinery.js.
      * @returns {Array<{x:number,y:number}>}
      */
-    buildToothOutline({ p1, ux, uy, nx, ny, plan }) {
-        const { depth, toothWidth, taper, count, startIndex, tooth } = plan;
-        const inX = -nx;   // inward (into the panel) unit vector
-        const inY = -ny;
-        const length = toothWidth * count;
-
-        // Point at distance `t` along the edge, offset `off` inward.
-        const P = (t, off) => ({
-            x: p1.x + ux * t + inX * off,
-            y: p1.y + uy * t + inY * off
-        });
-        // Notches are the removed teeth: same alternating parity as before.
-        const isNotch = (i) => i >= startIndex && ((i - startIndex) % 2 === 0);
-        const flare = tooth === 'trapezoid' ? taper : 0;
-
-        const pts = [P(0, 0)];   // tie into the starting corner at edge level
-        for (let i = 0; i < count; i++) {
-            const t0 = i * toothWidth;
-            const t1 = t0 + toothWidth;
-            if (isNotch(i)) {
-                // Cut inward; a dovetail flares wider at the base (socket grip).
-                pts.push(P(t0, 0));
-                pts.push(P(Math.max(0, t0 - flare), depth));
-                pts.push(P(Math.min(length, t1 + flare), depth));
-                pts.push(P(t1, 0));
-            } else {
-                // Tab: material stays on the boundary.
-                pts.push(P(t0, 0));
-                pts.push(P(t1, 0));
-            }
-        }
-        pts.push(P(length, 0));  // tie into the ending corner at edge level
-        return pts;
+    buildToothOutline(p) {
+        return buildToothOutline(p);
     }
 
     /**
