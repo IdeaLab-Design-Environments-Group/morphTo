@@ -146,13 +146,20 @@ export class HitTestService {
         const bounds = resolved.getBounds();
         if (!bounds || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) return null;
 
-        const handles = getResizeHandlePositions(bounds);
+        // The shape is drawn rotated about its bounds centre (withShapeRotation),
+        // so the corner handles live at the SPUN corners, not the axis-aligned
+        // ones. getResizeHandlePositions applies that spin — the same call the
+        // SelectionPass draws from, so the grab areas sit exactly on the discs.
+        const rotation = Number(shape.rotation || 0);
+        const cx = bounds.x + bounds.width / 2;
+        const cy = bounds.y + bounds.height / 2;
+        const handles = getResizeHandlePositions(bounds, rotation);
         const hitRadius = HANDLE_HIT_RADIUS / this.vc.viewport.zoom;
         for (const handle of handles) {
             const dx = worldX - handle.x;
             const dy = worldY - handle.y;
             if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-                return { shapeId, handle: handle.name, bounds, strategy };
+                return { shapeId, handle: handle.name, bounds, rotation, center: { x: cx, y: cy }, strategy };
             }
         }
         return null;

@@ -25,7 +25,7 @@ import EventBus, { EVENTS } from '../events/EventBus.js';
 import { LiteralBinding } from '../models/Binding.js';
 import { NoSnap, GridSnap } from '../core/SnapStrategy.js';
 import { EdgeJoineryMenu } from '../ui/EdgeJoineryMenu.js';
-import { getResizeCursor, computeResizedBounds } from '../views/canvas/canvasGeometry.js';
+import { getResizeCursor, computeResizedBounds, rotatePoint } from '../views/canvas/canvasGeometry.js';
 import { edgesFromItem, DEFAULT_HIT_DISTANCE } from '../geometry/edge/index.js';
 import { PathShape } from '../models/shapes/PathShape.js';
 import { AddShapeCommand, MutateShapesCommand } from '../commands/shapeCommands.js';
@@ -517,6 +517,14 @@ export class CanvasInputController {
                     shapeId: resizeHit.shapeId,
                     handle: resizeHit.handle,
                     startBounds,
+                    // Rotation and the bounds centre it spins about, captured
+                    // once: the resize runs in the shape's local (unrotated)
+                    // frame, which is where its parameters live.
+                    rotation: resizeHit.rotation ?? Number(shape?.rotation || 0),
+                    center: resizeHit.center ?? {
+                        x: startBounds.x + startBounds.width / 2,
+                        y: startBounds.y + startBounds.height / 2
+                    },
                     startState,
                     strategy,
                     changedProps: [],
@@ -581,6 +589,10 @@ export class CanvasInputController {
                     shapeId: shape.id,
                     selectedIds: selectedIdsArray,
                     initialPositions,
+                    // A click that never moves must not sync bindings or push
+                    // a history entry — set by onMouseMove on the first real
+                    // displacement.
+                    moved: false,
                     beforeSnapshots: this.snapshotShapes(selectedIdsArray)
                 };
 
@@ -730,7 +742,7 @@ export class CanvasInputController {
             const snappedPos = ix.snapStrategy.snap(worldPos.x, worldPos.y, { gridSize: ix.gridSize });
             const shape = this.context.shapeStore.get(ix.resizeState.shapeId);
             if (shape) {
-                const newBounds = computeResizedBounds(ix.resizeState.startBounds, ix.resizeState.handle, snappedPos);
+                const newBounds = this.resizeBoundsFor(ix.resizeState, snappedPos);
                 const strategy = ix.resizeState.strategy;
                 if (strategy && typeof strategy.apply === 'function') {
                     const changedProps = strategy.apply(shape, ix.resizeState.startState, newBounds) || [];
@@ -806,6 +818,9 @@ export class CanvasInputController {
 
                 const dx = currentWorldPos.x - initialWorldPos.x;
                 const dy = currentWorldPos.y - initialWorldPos.y;
+                if (dx !== 0 || dy !== 0) {
+                    ix.dragStart.moved = true;
+                }
 
                 selectedIds.forEach(shapeId => {
                     const shape = this.context.shapeStore.get(shapeId);
@@ -917,6 +932,48 @@ export class CanvasInputController {
             default:
                 break;
         }
+    }
+
+    /**
+     * New local-space bounds for a resize drag.
+     *
+     * A shape's parameters (and therefore its bounds) live in an unrotated
+     * local frame; the renderer spins that frame about the bounds centre. So
+     * for a rotated shape the pointer is first mapped back into the local
+     * frame, and the resulting bounds are then shifted so the corner opposite
+     * the grabbed handle stays put in world space.
+     *
+     * The shift is exact: rendering places a local point q at
+     * C + R(q - C) with C the CURRENT bounds centre. Moving the centre from
+     * C0 to C1 would drag the whole shape by (I - R)(C1 - C0), so translating
+     * the bounds by t = (I - R)(C0 - C1) cancels it. With that t, the grabbed
+     * corner lands exactly under the cursor and the anchor corner does not
+     * move. Rotation 0 reduces to plain computeResizedBounds.
+     *
+     * @param {{startBounds: Object, handle: string, rotation: number, center: {x:number,y:number}}} resizeState
+     * @param {{x: number, y: number}} worldPos - Snapped pointer, world space.
+     * @returns {{x:number,y:number,width:number,height:number}}
+     */
+    resizeBoundsFor(resizeState, worldPos) {
+        const rotation = Number(resizeState.rotation || 0);
+        if (!rotation) {
+            return computeResizedBounds(resizeState.startBounds, resizeState.handle, worldPos);
+        }
+
+        const c0 = resizeState.center;
+        const local = rotatePoint(worldPos.x, worldPos.y, c0.x, c0.y, -rotation);
+        const bounds = computeResizedBounds(resizeState.startBounds, resizeState.handle, local);
+
+        const c1x = bounds.x + bounds.width / 2;
+        const c1y = bounds.y + bounds.height / 2;
+        // t = (I - R)(C0 - C1), which is C0 minus C0 spun about the new centre.
+        const spun = rotatePoint(c0.x, c0.y, c1x, c1y, rotation);
+        return {
+            x: bounds.x + (c0.x - spun.x),
+            y: bounds.y + (c0.y - spun.y),
+            width: bounds.width,
+            height: bounds.height
+        };
     }
 
     /**
@@ -1044,8 +1101,11 @@ export class CanvasInputController {
         }
 
         if (ix.isDragging) {
-            // If we were dragging shape(s), sync bindings and emit events now
-            if (ix.dragStart && ix.dragStart.shapeId) {
+            // If we actually moved shape(s), sync bindings and emit events now.
+            // A bare click (no displacement) leaves the model untouched, so it
+            // must not sync literal bindings — doing so changes toJSON() and
+            // pushes a bogus "Move shapes" entry onto the undo stack.
+            if (ix.dragStart && ix.dragStart.shapeId && ix.dragStart.moved) {
                 const selectedIds = ix.dragStart.selectedIds || [ix.dragStart.shapeId];
 
                 selectedIds.forEach(shapeId => {

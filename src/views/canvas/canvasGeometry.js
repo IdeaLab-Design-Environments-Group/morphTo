@@ -99,36 +99,45 @@ export function getRotationHandlePosition(bounds, rotation, zoom) {
         return { x: baseX, y: baseY, cx, cy, ax: cx, ay: y };
     }
 
-    const rad = (rotation * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    const spin = (px, py) => ({
-        x: cx + (px - cx) * cos - (py - cy) * sin,
-        y: cy + (px - cx) * sin + (py - cy) * cos
-    });
-    const handle = spin(baseX, baseY);
-    const anchor = spin(cx, y);
+    const handle = rotatePoint(baseX, baseY, cx, cy, rotation);
+    const anchor = rotatePoint(cx, y, cx, cy, rotation);
     return { x: handle.x, y: handle.y, cx, cy, ax: anchor.x, ay: anchor.y };
 }
 
 /**
  * The four corner resize-handle positions for a selection bounds.
  *
+ * The shape is drawn spun about its bounds centre (withShapeRotation), so the
+ * handles live at the SPUN corners. Names stay in the shape's local frame:
+ * 'nw' is always the corner that is top-left before rotation, which is what
+ * ShapeResizeStrategies and computeResizedBounds operate on.
+ *
  * @param {{x:number,y:number,width:number,height:number}} bounds
+ * @param {number} [rotation=0] - Degrees.
  * @returns {Array<{name: 'nw'|'ne'|'se'|'sw', x: number, y: number}>}
  */
-export function getResizeHandlePositions(bounds) {
+export function getResizeHandlePositions(bounds, rotation = 0) {
     const padding = SELECTION_PADDING;
     const x = bounds.x - padding;
     const y = bounds.y - padding;
     const w = bounds.width + padding * 2;
     const h = bounds.height + padding * 2;
-    return [
+    const corners = [
         { name: 'nw', x, y },
         { name: 'ne', x: x + w, y },
         { name: 'se', x: x + w, y: y + h },
         { name: 'sw', x, y: y + h }
     ];
+
+    const rotationDeg = Number(rotation || 0);
+    if (!rotationDeg) return corners;
+
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    return corners.map(({ name, x: px, y: py }) => {
+        const spun = rotatePoint(px, py, cx, cy, rotationDeg);
+        return { name, x: spun.x, y: spun.y };
+    });
 }
 
 /**

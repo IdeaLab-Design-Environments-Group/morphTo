@@ -25,6 +25,7 @@ import {
     withShapeRotation,
     getRotationHandlePosition,
     getResizeHandlePositions,
+    rotatePoint,
     isClosedShape,
     SELECTION_COLOR,
     HOVER_COLOR,
@@ -118,9 +119,9 @@ export class SelectionPass {
 
             const rotation = Number(shape.rotation || 0);
             // Dashed bounds outline, corner handles, dimensions, rotation handle
-            this.renderSelectionOutline(frame, bounds);
-            this.renderResizeHandles(frame, bounds);
-            this.renderSelectionDimensions(frame, bounds, shapeForBounds);
+            this.renderSelectionOutline(frame, bounds, rotation);
+            this.renderResizeHandles(frame, bounds, rotation);
+            this.renderSelectionDimensions(frame, bounds, shapeForBounds, rotation);
             this.renderRotationHandle(frame, bounds, rotation);
 
             // Render path handles for selected path shapes
@@ -221,32 +222,37 @@ export class SelectionPass {
     /**
      * Dashed bounds outline, matching selectionSystem.drawSelectionOutline:
      * selection colour at 25% alpha, 1px, dash [4, 4], drawn on the bounds
-     * with no inset.
+     * with no inset, spun with the shape about the bounds centre.
      */
-    renderSelectionOutline(frame, bounds) {
+    renderSelectionOutline(frame, bounds, rotation = 0) {
         const { ctx } = frame;
         const zoom = frame.viewport.zoom;
 
-        ctx.save();
-        ctx.strokeStyle = `${SELECTION_COLOR}40`;
-        ctx.lineWidth = 1 / zoom;
-        ctx.setLineDash([4 / zoom, 4 / zoom]);
-        ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-        ctx.setLineDash([]);
-        ctx.restore();
+        withShapeRotation(ctx, bounds, rotation, () => {
+            ctx.save();
+            ctx.strokeStyle = `${SELECTION_COLOR}40`;
+            ctx.lineWidth = 1 / zoom;
+            ctx.setLineDash([4 / zoom, 4 / zoom]);
+            ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+            ctx.setLineDash([]);
+            ctx.restore();
+        });
     }
 
     /**
      * The four corner handles (handleSystem.drawCornerHandles). Positions come
-     * from getResizeHandlePositions so hit-testing and drawing agree.
+     * from getResizeHandlePositions — the same call HitTestService measures
+     * against — so the discs and the grab areas agree at every rotation.
+     * The handles themselves are discs, so only their centres are spun; the
+     * chrome stays screen-space upright as in morphTo.
      */
-    renderResizeHandles(frame, bounds) {
+    renderResizeHandles(frame, bounds, rotation = 0) {
         const { ctx } = frame;
         const zoom = frame.viewport.zoom;
 
         ctx.save();
         ctx.setLineDash([]);
-        getResizeHandlePositions(bounds).forEach(({ x, y }) => {
+        getResizeHandlePositions(bounds, rotation).forEach(({ x, y }) => {
             drawHandle(ctx, x, y, zoom);
         });
         ctx.restore();
@@ -353,11 +359,25 @@ export class SelectionPass {
     /**
      * Render width/height dimension labels for selection, plus a material
      * depth badge above the shape.
+     *
+     * CAD dimensioning behaviour: the leader lines, the end ticks and every
+     * offset are laid out in the shape's LOCAL frame and then spun about the
+     * bounds centre, so the annotations hug a rotated shape the way the
+     * selection chrome does. The text itself is drawn WITHOUT the shape's
+     * rotation so it stays screen-upright and readable, and each label is
+     * pushed outward far enough for its (axis-aligned) box to clear the leader
+     * line — a plain rotated anchor would drop the label on top of the shape
+     * near 90 degrees.
+     *
+     * The measured values are the LOCAL width and height, so a 100x60 shape
+     * reads 100 and 60 at every rotation rather than the rotated box's extent.
+     *
      * @param {Object} frame
      * @param {{x,y,width,height}} bounds
      * @param {?Object} shape - Resolved shape (for its depth); optional.
+     * @param {number} [rotation=0] - Degrees.
      */
-    renderSelectionDimensions(frame, bounds, shape = null) {
+    renderSelectionDimensions(frame, bounds, shape = null, rotation = 0) {
         const { ctx } = frame;
         const padding = 8;
         const x = bounds.x - padding;
@@ -371,8 +391,41 @@ export class SelectionPass {
         const textPadding = 4 / frame.viewport.zoom;
         const fmt = (v) => `${v.toFixed(2)} mm`;
 
+        // Values are measured in the local frame: rotation never changes them.
         const widthText = fmt(bounds.width);
         const heightText = fmt(bounds.height);
+
+        // Local -> world: the same spin withShapeRotation applies to the shape.
+        const cx = bounds.x + bounds.width / 2;
+        const cy = bounds.y + bounds.height / 2;
+        const map = (px, py) => rotatePoint(px, py, cx, cy, rotation);
+        const moveTo = (px, py) => { const p = map(px, py); ctx.moveTo(p.x, p.y); };
+        const lineTo = (px, py) => { const p = map(px, py); ctx.lineTo(p.x, p.y); };
+
+        // Outward unit directions, spun. +y points below the shape, +x to its
+        // right, both in the local frame.
+        const unit = (lx, ly) => {
+            const o = map(cx, cy);
+            const t = map(cx + lx, cy + ly);
+            return { x: t.x - o.x, y: t.y - o.y };
+        };
+        const outDown = unit(0, 1);
+        const outRight = unit(1, 0);
+
+        /**
+         * Anchor for an upright label: the local point spun into world space,
+         * then pushed along `dir` by however much MORE of the label box now
+         * faces the shape than did at rotation 0. `halfX`/`halfY` are the box's
+         * screen half-extents and `base` is the one the unrotated layout
+         * already cleared, so rotation 0 pushes nothing and a quarter turn —
+         * where a wide label would otherwise land on the shape — pushes by the
+         * difference.
+         */
+        const labelAnchor = (lx, ly, dir, halfX, halfY, base) => {
+            const p = map(lx, ly);
+            const clear = Math.max(0, Math.abs(dir.x) * halfX + Math.abs(dir.y) * halfY - base);
+            return { x: p.x + dir.x * clear, y: p.y + dir.y * clear };
+        };
 
         ctx.save();
         ctx.strokeStyle = lineColor;
@@ -382,53 +435,59 @@ export class SelectionPass {
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
 
-        // Horizontal dimension (bottom)
+        // Horizontal dimension (below the shape's own bottom edge)
         const bottomY = y + h + 10 / frame.viewport.zoom;
         ctx.beginPath();
-        ctx.moveTo(x, bottomY);
-        ctx.lineTo(x + w, bottomY);
+        moveTo(x, bottomY);
+        lineTo(x + w, bottomY);
         ctx.stroke();
 
         // End ticks
         ctx.beginPath();
-        ctx.moveTo(x, bottomY - 4 / frame.viewport.zoom);
-        ctx.lineTo(x, bottomY + 4 / frame.viewport.zoom);
-        ctx.moveTo(x + w, bottomY - 4 / frame.viewport.zoom);
-        ctx.lineTo(x + w, bottomY + 4 / frame.viewport.zoom);
+        moveTo(x, bottomY - 4 / frame.viewport.zoom);
+        lineTo(x, bottomY + 4 / frame.viewport.zoom);
+        moveTo(x + w, bottomY - 4 / frame.viewport.zoom);
+        lineTo(x + w, bottomY + 4 / frame.viewport.zoom);
         ctx.stroke();
 
-        // Width label with background
-        const textX = x + w / 2;
-        const textY = bottomY + 12 / frame.viewport.zoom;
+        // Width label with background, upright at the spun anchor
         const textWidth = ctx.measureText(widthText).width + textPadding * 2;
         const textHeight = fontSize + textPadding * 2;
+        const wAnchor = labelAnchor(
+            x + w / 2, bottomY + 12 / frame.viewport.zoom,
+            outDown, textWidth / 2, textHeight / 2, textHeight / 2
+        );
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillRect(textX - textWidth / 2, textY - textHeight / 2, textWidth, textHeight);
+        ctx.fillRect(wAnchor.x - textWidth / 2, wAnchor.y - textHeight / 2, textWidth, textHeight);
         ctx.fillStyle = textColor;
-        ctx.fillText(widthText, textX, textY);
+        ctx.fillText(widthText, wAnchor.x, wAnchor.y);
 
-        // Vertical dimension (right)
+        // Vertical dimension (beyond the shape's own right edge)
         const rightX = x + w + 10 / frame.viewport.zoom;
         ctx.beginPath();
-        ctx.moveTo(rightX, y);
-        ctx.lineTo(rightX, y + h);
+        moveTo(rightX, y);
+        lineTo(rightX, y + h);
         ctx.stroke();
 
         // End ticks
         ctx.beginPath();
-        ctx.moveTo(rightX - 4 / frame.viewport.zoom, y);
-        ctx.lineTo(rightX + 4 / frame.viewport.zoom, y);
-        ctx.moveTo(rightX - 4 / frame.viewport.zoom, y + h);
-        ctx.lineTo(rightX + 4 / frame.viewport.zoom, y + h);
+        moveTo(rightX - 4 / frame.viewport.zoom, y);
+        lineTo(rightX + 4 / frame.viewport.zoom, y);
+        moveTo(rightX - 4 / frame.viewport.zoom, y + h);
+        lineTo(rightX + 4 / frame.viewport.zoom, y + h);
         ctx.stroke();
 
-        // Height label (rotated)
-        const hTextX = rightX + 12 / frame.viewport.zoom;
-        const hTextY = y + h / 2;
+        // Height label: read bottom-to-top as it always has, but in SCREEN
+        // space — the quarter turn below is the label's own, not the shape's,
+        // so its footprint is the text box with its extents swapped.
         const hTextWidth = ctx.measureText(heightText).width + textPadding * 2;
         const hTextHeight = fontSize + textPadding * 2;
+        const hAnchor = labelAnchor(
+            rightX + 12 / frame.viewport.zoom, y + h / 2,
+            outRight, hTextHeight / 2, hTextWidth / 2, hTextHeight / 2
+        );
         ctx.save();
-        ctx.translate(hTextX, hTextY);
+        ctx.translate(hAnchor.x, hAnchor.y);
         ctx.rotate(Math.PI / 2);
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         ctx.fillRect(-hTextWidth / 2, -hTextHeight / 2, hTextWidth, hTextHeight);
@@ -436,18 +495,21 @@ export class SelectionPass {
         ctx.fillText(heightText, 0, 0);
         ctx.restore();
 
-        // Material-thickness badge above the shape.
+        // Material-thickness badge, above the shape's own top edge.
         if (shape) {
             const depth = Number(shape.depth ?? 3);
             const badge = `d ${depth.toFixed(1)}mm`;
-            const badgeX = x + w / 2;
-            const badgeY = y - 12 / frame.viewport.zoom;
             const bw = ctx.measureText(badge).width + textPadding * 2;
             const bh = fontSize + textPadding * 2;
+            const outUp = { x: -outDown.x, y: -outDown.y };
+            const bAnchor = labelAnchor(
+                x + w / 2, y - 12 / frame.viewport.zoom,
+                outUp, bw / 2, bh / 2, bh / 2
+            );
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
-            ctx.fillRect(badgeX - bw / 2, badgeY - bh / 2, bw, bh);
+            ctx.fillRect(bAnchor.x - bw / 2, bAnchor.y - bh / 2, bw, bh);
             ctx.fillStyle = textColor;
-            ctx.fillText(badge, badgeX, badgeY);
+            ctx.fillText(badge, bAnchor.x, bAnchor.y);
         }
 
         ctx.restore();
