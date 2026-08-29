@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAquiToWorkspace(aquiText, ws) {
       if (typeof window.rebuildWorkspaceFromAqui !== 'function') {
-        console.error('rebuildWorkspaceFromAqui is not available on window. Add `window.rebuildWorkspaceFromAqui = rebuildWorkspaceFromAqui;` in app.js');
+        console.error('rebuildWorkspaceFromAqui is not available on window; the shell should have installed it.');
         return;
       }
       try {

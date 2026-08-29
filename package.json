@@ -1,16 +1,11 @@
 {
   "name": "morphto",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
+  "description": "Parametric 2D design environment for digital fabrication education",
   "scripts": {
     "test": "node tests/run-node.js",
     "serve": "python3 -m http.server 8080"
-  },
-  "exports": {
-    "./lexer": "./src/lexer.mjs",
-    "./envrionment": "./src/environment.mjs",
-    "./parser": "./src/parser.mjs",
-    "./interpreter": "./src/interpreter.mjs",
-    "./renderer": "./src/renderer.mjs"
   }
 }
