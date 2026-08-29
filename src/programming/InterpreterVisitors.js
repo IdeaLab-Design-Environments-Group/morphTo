@@ -49,7 +49,7 @@ export class ExpressionVisitor extends BaseVisitor {
       case 'array':
         return node.elements.map(e => this.interpreter.evaluateExpression(e));
       case 'function_call':
-        return this.interpreter.visitors.functionCall.visit(node);
+        return this.interpreter.visitors.functionCall.visitFunctionCall(node);
       case 'param_ref':
         const param = this.interpreter.env.getParameter(node.name);
         return param && typeof param === 'object' ? param[node.property] : undefined;
@@ -393,7 +393,9 @@ export class DrawVisitor extends BaseVisitor {
       layerName: null
     };
     
-    this.interpreter.env.shapes.set(node.name, shape);
+    // env.shapes is a getter that rebuilds a Map, so writing to it is a no-op;
+    // register through addShape so the turtle path reaches the shape store.
+    this.interpreter.env.addShape(node.name, shape);
     return shape;
   }
 
