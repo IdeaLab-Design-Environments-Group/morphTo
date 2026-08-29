@@ -24,6 +24,23 @@ import EventBus, { EVENTS } from '../events/EventBus.js';
 const COALESCE_WINDOW_MS = 1200;
 
 /**
+ * Drop joinery entries whose edge no longer exists after a geometry change,
+ * keeping the removed entries so undo can put them back.
+ *
+ * Pruning rides on the command rather than on an event because it mutates
+ * document state that toJSON() serializes: dropping a hexagon to 3 sides
+ * must retire the joint on edge 4 in the SAME Ctrl+Z that restores the
+ * sixth side, or the joint silently reattaches when the count goes back up.
+ *
+ * @param {import('../core/SceneState.js').SceneState} scene
+ * @param {string[]} shapeIds - Shapes whose geometry just changed.
+ * @returns {Array<{key: string, joinery: Object}>} Entries removed.
+ */
+function pruneJoineryFor(scene, shapeIds) {
+    return shapeIds.flatMap(id => scene.shapeStore.pruneOrphanedJoinery(id));
+}
+
+/**
  * Add one shape. First execution can use a live instance (from the drop /
  * path tool); redo rebuilds from the captured JSON.
  */
@@ -39,11 +56,13 @@ export class AddShapeCommand extends Command {
         this.shapeJSON = shape.toJSON();
         this.select = select;
         this._liveShape = shape;
+        this.previousSelectionIds = null; // selection before the add
     }
 
     execute(scene) {
         const shape = this._liveShape ?? ShapeRegistry.fromJSON(this.shapeJSON);
         this._liveShape = null; // later redos rebuild from JSON
+        this.previousSelectionIds = Array.from(scene.shapeStore.selectedShapeIds);
         scene.shapeStore.add(shape);
         if (this.select) {
             scene.shapeStore.setSelected(shape.id);
@@ -52,7 +71,8 @@ export class AddShapeCommand extends Command {
 
     undo(scene) {
         scene.shapeStore.remove(this.shapeJSON.id);
-        scene.shapeStore.clearSelection();
+        // Put back whatever was selected before the add, not nothing.
+        scene.shapeStore.setSelectedIds(this.previousSelectionIds ?? []);
     }
 }
 
@@ -133,10 +153,12 @@ export class DuplicateShapesCommand extends Command {
         this.offsetX = offsetX;
         this.offsetY = offsetY;
         this.createdJSONs = null; // captured on first execute; redo replays
+        this.previousSelectionIds = null; // selection before the duplicate
     }
 
     execute(scene) {
         const store = scene.shapeStore;
+        this.previousSelectionIds = Array.from(store.selectedShapeIds);
 
         if (this.createdJSONs) {
             // Redo: rebuild the exact same duplicates.
@@ -164,7 +186,8 @@ export class DuplicateShapesCommand extends Command {
         (this.createdJSONs ?? []).forEach(json => {
             scene.shapeStore.remove(json.id);
         });
-        scene.shapeStore.clearSelection();
+        // Restore the originals' selection rather than dropping it.
+        scene.shapeStore.setSelectedIds(this.previousSelectionIds ?? []);
     }
 }
 
@@ -185,18 +208,27 @@ export class MutateShapesCommand extends Command {
     constructor(label, entries) {
         super(label);
         this.entries = entries;
+        /** @type {Array<{key: string, joinery: Object}>} Joinery this gesture orphaned. */
+        this.prunedJoinery = [];
     }
 
     execute(scene) {
         for (const { after } of Object.values(this.entries)) {
             scene.shapeStore.replace(ShapeRegistry.fromJSON(after));
         }
+        this.prunedJoinery = pruneJoineryFor(scene, Object.keys(this.entries));
+    }
+
+    /** The gesture already mutated the shapes live; prune from here instead. */
+    onRecorded(scene) {
+        this.prunedJoinery = pruneJoineryFor(scene, Object.keys(this.entries));
     }
 
     undo(scene) {
         for (const { before } of Object.values(this.entries)) {
             scene.shapeStore.replace(ShapeRegistry.fromJSON(before));
         }
+        scene.shapeStore.restoreJoinery(this.prunedJoinery);
     }
 
     coalesceWith(next) {
@@ -210,6 +242,9 @@ export class MutateShapesCommand extends Command {
         nextIds.forEach(id => {
             this.entries[id].after = next.entries[id].after;
         });
+        // Keep the successor's orphans too: undo of the merged entry has to
+        // restore everything the whole run pruned, not just the last batch.
+        this.prunedJoinery = this.prunedJoinery.concat(next.prunedJoinery);
         this.timestamp = next.timestamp;
         return true;
     }
@@ -231,6 +266,8 @@ export class SetBindingCommand extends Command {
         this.property = property;
         this.bindingJSON = bindingJSON;
         this.previousBindingJSON = undefined; // captured on execute
+        /** @type {Array<{key: string, joinery: Object}>} Joinery the new binding orphaned. */
+        this.prunedJoinery = [];
     }
 
     execute(scene) {
@@ -239,12 +276,16 @@ export class SetBindingCommand extends Command {
         const existing = shape.getBinding(this.property);
         this.previousBindingJSON = existing ? existing.toJSON() : null;
         this.applyBinding(scene, shape, this.bindingJSON);
+        // A binding can drive an edge count (sides, pathIndex…), so it can
+        // orphan joinery just as a literal edit can.
+        this.prunedJoinery = pruneJoineryFor(scene, [this.shapeId]);
     }
 
     undo(scene) {
         const shape = scene.shapeStore.get(this.shapeId);
         if (!shape) return;
         this.applyBinding(scene, shape, this.previousBindingJSON);
+        scene.shapeStore.restoreJoinery(this.prunedJoinery);
     }
 
     /** @private */
@@ -276,6 +317,8 @@ export class SetShapePropertyCommand extends Command {
         this.value = value;
         this.previousValue = undefined;
         this.previousBindingJSON = undefined;
+        /** @type {Array<{key: string, joinery: Object}>} Joinery this edit orphaned. */
+        this.prunedJoinery = [];
     }
 
     execute(scene) {
@@ -286,6 +329,7 @@ export class SetShapePropertyCommand extends Command {
         this.previousBindingJSON = binding ? binding.toJSON() : null;
 
         this.apply(shape, this.value);
+        this.prunedJoinery = pruneJoineryFor(scene, [this.shapeId]);
     }
 
     undo(scene) {
@@ -302,6 +346,7 @@ export class SetShapePropertyCommand extends Command {
             }
         }
         this.emitChange(shape);
+        scene.shapeStore.restoreJoinery(this.prunedJoinery);
     }
 
     coalesceWith(next) {
@@ -309,6 +354,9 @@ export class SetShapePropertyCommand extends Command {
         if (next.shapeId !== this.shapeId || next.property !== this.property) return false;
         if (next.timestamp - this.timestamp > COALESCE_WINDOW_MS) return false;
         this.value = next.value;
+        // Undo of the merged entry reverts to THIS command's original value,
+        // so it must restore every orphan the whole run produced.
+        this.prunedJoinery = this.prunedJoinery.concat(next.prunedJoinery);
         this.timestamp = next.timestamp;
         return true;
     }

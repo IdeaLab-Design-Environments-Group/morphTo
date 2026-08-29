@@ -63,6 +63,10 @@ export class HistoryManager {
      * @param {import('./Command.js').Command} command
      */
     record(command) {
+        // The mutation already happened live; give the command its one
+        // chance at post-mutation bookkeeping before it enters the stack
+        // (and before coalescing may fold it into the entry above).
+        command.onRecorded(this.sceneState);
         this.push(command);
     }
 

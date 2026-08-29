@@ -175,7 +175,9 @@ export class Serializer {
         
         // Deserialize scene state
         if (json.parameters) {
-            sceneState.parameterStore.fromJSON({ parameters: json.parameters });
+            // ParameterStore.fromJSON is async — await it so parameters exist
+            // before shape bindings are restored below.
+            await sceneState.parameterStore.fromJSON({ parameters: json.parameters });
         }
         
         if (json.shapes) {

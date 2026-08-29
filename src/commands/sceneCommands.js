@@ -87,7 +87,8 @@ export class ReplaceSceneCommand extends Command {
             parameters: scene.parameterStore.toJSON().parameters,
             shapes: scene.shapeStore.toJSON().shapes,
             edgeJoinery: scene.shapeStore.toJSON().edgeJoinery,
-            selectedShapeId: scene.shapeStore.selectedShapeId
+            selectedShapeId: scene.shapeStore.selectedShapeId,
+            selectedShapeIds: Array.from(scene.shapeStore.selectedShapeIds)
         };
     }
 
@@ -98,6 +99,9 @@ export class ReplaceSceneCommand extends Command {
         await scene.shapeStore.fromJSON({
             shapes: snap.shapes,
             selectedShapeId: snap.selectedShapeId || null,
+            // Older snapshots only carried the primary id; fall back to it.
+            selectedShapeIds: snap.selectedShapeIds ||
+                (snap.selectedShapeId ? [snap.selectedShapeId] : []),
             edgeJoinery: snap.edgeJoinery || []
         });
         // Stores' fromJSON is silent; announce so every panel re-reads.

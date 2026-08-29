@@ -54,6 +54,17 @@ export class Command {
     }
 
     /**
+     * Hook for commands that are `record()`ed instead of executed: their
+     * mutation is already applied live, so this is the only chance to do
+     * post-mutation bookkeeping (e.g. pruning joinery orphaned by the
+     * gesture) in the same history entry that will undo it.
+     *
+     * @param {import('../core/SceneState.js').SceneState} scene
+     * @returns {void}
+     */
+    onRecorded(scene) {}
+
+    /**
      * Try to absorb a newer command into this one (slider drags, nudges).
      * Implementations must keep THIS command's undo state (the oldest) and
      * take NEXT's redo state (the newest).
