@@ -19,10 +19,14 @@
  */
 import EventBus, { EVENTS } from '../events/EventBus.js';
 
-/** Zoom clamp range, matching the original canvas behavior. */
-// Zoom limits, matching morphTo's coordinate system.
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 6;
+/**
+ * Zoom limits and button step, taken verbatim from morphTo's CoordinateSystem
+ * (minZoom / maxZoom / zoomStep). Exported so the zoom UI clamps to the same
+ * range instead of inventing its own.
+ */
+export const MIN_ZOOM = 0.2;
+export const MAX_ZOOM = 6;
+export const ZOOM_STEP = 0.15;
 
 export class ViewportController {
     /**
@@ -54,6 +58,21 @@ export class ViewportController {
          * @type {boolean}
          */
         this.hasInitializedZoom = false;
+
+        /** morphTo's CoordinateSystem exposed these; the zoom UI reads them. */
+        this.minZoom = MIN_ZOOM;
+        this.maxZoom = MAX_ZOOM;
+        this.zoomStep = ZOOM_STEP;
+    }
+
+    /**
+     * Clamp a zoom level into morphTo's [0.2, 6] range.
+     *
+     * @param {number} value
+     * @returns {number}
+     */
+    clampZoom(value) {
+        return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
     }
 
     /** @returns {{x: number, y: number, zoom: number}} Active tab's live viewport. */
@@ -107,7 +126,7 @@ export class ViewportController {
 
     /**
      * Zoom by a factor around a screen-space center point, keeping the world
-     * position under the cursor fixed. Zoom clamps to [0.1, 5].
+     * position under the cursor fixed. Zoom clamps to morphTo's [0.2, 6].
      *
      * @param {number} factor - e.g. 1.1 to zoom in, 0.9 to zoom out.
      * @param {number} centerX - Screen X of the zoom center.
@@ -115,7 +134,7 @@ export class ViewportController {
      */
     zoom(factor, centerX, centerY) {
         const worldPos = this.screenToWorld(centerX, centerY);
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.viewport.zoom * factor));
+        const newZoom = this.clampZoom(this.viewport.zoom * factor);
 
         this.viewport.x = centerX - worldPos.x * newZoom;
         this.viewport.y = centerY - worldPos.y * newZoom;

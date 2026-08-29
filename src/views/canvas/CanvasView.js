@@ -219,9 +219,10 @@ export class CanvasView extends Component {
         const height = this.vc.cssHeight || this.canvas.height / (window.devicePixelRatio || 1);
         this.ctx.clearRect(0, 0, width, height);
 
-        if (this.interaction.showGrid) {
-            this.passes.grid.render(frame);
-        }
+        // Always run: GridPass paints the work surface, rulers and axes
+        // unconditionally and gates only the dots/major lines on showGrid,
+        // exactly as morphTo's CoordinateSystem.clear() does.
+        this.passes.grid.render(frame);
 
         this.ctx.save();
         this.ctx.translate(frame.viewport.x, frame.viewport.y);

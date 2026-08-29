@@ -78,6 +78,15 @@ export class KeyboardShortcutController {
 
         const shapeStore = this.context.shapeStore;
 
+        // ';': toggle grid visibility. Routed through the toolbar button so the
+        // button's .active state stays in sync, as morphTo's handleKeyDown does
+        // via toggleGrid() + updateGridButtonState().
+        if (e.key === ';' && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            document.getElementById('grid-toggle-btn')?.click();
+            return;
+        }
+
         // 'E' key: toggle edge selection mode
         if (e.key === 'e' || e.key === 'E') {
             e.preventDefault();
