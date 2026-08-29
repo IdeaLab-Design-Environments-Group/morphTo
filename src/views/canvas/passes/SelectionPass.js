@@ -1,25 +1,36 @@
 /**
  * @fileoverview SelectionPass — draws all selection chrome: per-shape
- * selection fill, corner brackets, dimension labels, the rotation handle,
- * bezier handles on selected paths, the line-shape endpoint handles, edge
+ * selection fill, the dashed bounds outline, the four corner handles,
+ * dimension labels, the rotation handle, bezier handles on selected paths,
+ * the line-shape endpoint handles, the group box for a multi-selection, edge
  * selection/hover highlights (edge mode), and the shape hover highlight
  * (shape mode).
  *
- * Ported from CanvasRenderer.renderSelection(), renderShapeHover(),
- * renderEdgeSelection(), renderSelectionBrackets(), renderRotationHandle(),
- * renderSelectionDimensions(), and renderPathHandles().
+ * The visual treatment is morphTo's: see selectionSystem.mjs
+ * (drawSelectionOutline, drawHoverOutline, drawMultiSelectionOutline,
+ * drawSelectionCount) and handleSystem.mjs (drawCornerHandles,
+ * drawRotationHandle, drawHandleAtPosition) in the reference app. morphTo
+ * draws its chrome in screen space, so every radius, line width and dash
+ * length here is a screen-pixel constant divided by zoom.
  *
- * Call graph preserved from the old renderSelection(): for each selected
- * shape draw fill → brackets → dimensions → rotation handle (path shapes
- * additionally get bezier handles; line shapes short-circuit to endpoint
- * handles only), then edge selection highlights, then shape hover highlight.
+ * Call graph: for each selected shape draw fill → outline → corner handles →
+ * dimensions → rotation handle (path shapes additionally get bezier handles;
+ * line shapes short-circuit to endpoint handles only), then the group box for
+ * a multi-selection, then edge selection highlights, then the shape hover
+ * highlight.
  *
  * @module views/canvas/passes/SelectionPass
  */
 import {
     withShapeRotation,
     getRotationHandlePosition,
-    isClosedShape
+    getResizeHandlePositions,
+    isClosedShape,
+    SELECTION_COLOR,
+    HOVER_COLOR,
+    HANDLE_FILL_COLOR,
+    HANDLE_SHADOW_COLOR,
+    HANDLE_RADIUS
 } from '../canvasGeometry.js';
 import {
     renderEdgeHover,
@@ -28,12 +39,27 @@ import {
 } from '../../../geometry/edge/index.js';
 
 /**
- * Selection palette, matching morphTo's canvas styling (see
- * src/renderer/selectionSystem.mjs, which this pass replaces).
+ * Draw one morphTo handle: a 1px drop shadow, a white disc, and a coloured
+ * ring. Mirrors handleSystem.drawHandleAtPosition; radius and line widths are
+ * screen pixels converted to world units by `zoom`.
  */
-const SELECTION_COLOR = '#FF5722';
-const HOVER_COLOR = '#FF6B35';
-const HANDLE_FILL = '#ffffff';
+function drawHandle(ctx, x, y, zoom, { radius = HANDLE_RADIUS, color = SELECTION_COLOR } = {}) {
+    const r = radius / zoom;
+    const shadowOffset = 0.5 / zoom;
+
+    ctx.beginPath();
+    ctx.arc(x + shadowOffset, y + shadowOffset, r, 0, Math.PI * 2);
+    ctx.fillStyle = HANDLE_SHADOW_COLOR;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = HANDLE_FILL_COLOR;
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 / zoom;
+    ctx.stroke();
+}
 
 export class SelectionPass {
     /**
@@ -65,30 +91,15 @@ export class SelectionPass {
                 ctx.beginPath();
                 path.toCanvasPath(ctx);
                 ctx.strokeStyle = SELECTION_COLOR;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2 / frame.viewport.zoom;
                 ctx.stroke();
 
-                const r = 5 / frame.viewport.zoom;
+                const zoom = frame.viewport.zoom;
                 const midX = (shapeForBounds.x1 + shapeForBounds.x2) / 2;
                 const midY = (shapeForBounds.y1 + shapeForBounds.y2) / 2;
-                ctx.fillStyle = '#fff';
-                ctx.strokeStyle = SELECTION_COLOR;
-                ctx.lineWidth = 2 / frame.viewport.zoom;
-
-                ctx.beginPath();
-                ctx.arc(shapeForBounds.x1, shapeForBounds.y1, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(shapeForBounds.x2, shapeForBounds.y2, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(midX, midY, r * 0.8, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
+                drawHandle(ctx, shapeForBounds.x1, shapeForBounds.y1, zoom);
+                drawHandle(ctx, shapeForBounds.x2, shapeForBounds.y2, zoom);
+                drawHandle(ctx, midX, midY, zoom, { radius: HANDLE_RADIUS * 0.8 });
                 ctx.restore();
                 return;
             }
@@ -100,16 +111,16 @@ export class SelectionPass {
                 withShapeRotation(ctx, bounds, rotation, () => {
                     ctx.beginPath();
                     path.toCanvasPath(ctx);
-                    ctx.fillStyle = 'rgba(0, 153, 255, 0.08)';
+                    ctx.fillStyle = `${SELECTION_COLOR}10`;
                     ctx.fill('evenodd');
                 });
             }
 
             const rotation = Number(shape.rotation || 0);
-            // Draw selection brackets + dimensions
-            this.renderSelectionBrackets(frame, bounds);
+            // Dashed bounds outline, corner handles, dimensions, rotation handle
+            this.renderSelectionOutline(frame, bounds);
+            this.renderResizeHandles(frame, bounds);
             this.renderSelectionDimensions(frame, bounds, shapeForBounds);
-            // Rotation handle
             this.renderRotationHandle(frame, bounds, rotation);
 
             // Render path handles for selected path shapes
@@ -117,6 +128,12 @@ export class SelectionPass {
                 this.renderPathHandles(frame, shape);
             }
         });
+
+        // Group outline + "N selected" badge, as in morphTo's
+        // selectionSystem.drawMultiSelectionOutline.
+        if (selectedIds.length > 1) {
+            this.renderMultiSelectionOutline(frame, selectedIds);
+        }
 
         // Render edge selection highlights
         this.renderEdgeSelection(frame);
@@ -146,38 +163,18 @@ export class SelectionPass {
         const resolved = frame.bindingResolver.resolveShape(shape);
         const bounds = resolved.getBounds();
 
+        // morphTo's selectionSystem.drawHoverOutline: a dashed bounding box in
+        // the hover colour at 50% alpha, 2px, dash [2, 2] — no fill.
+        const zoom = frame.viewport.zoom;
         const rotation = Number(shape.rotation || resolved.rotation || 0);
         withShapeRotation(ctx, bounds, rotation, () => {
-            // Draw hover fill for closed shapes
-            if (isClosedShape(resolved) && typeof resolved.toGeometryPath === 'function') {
-                const path = resolved.toGeometryPath();
-                ctx.beginPath();
-                path.toCanvasPath(ctx);
-                ctx.fillStyle = 'rgba(0, 153, 255, 0.12)';
-                ctx.fill('evenodd');
-            }
-
-            // Draw hover outline
-            ctx.strokeStyle = HOVER_COLOR;
-            ctx.lineWidth = 2 / frame.viewport.zoom;
+            ctx.save();
+            ctx.strokeStyle = `${HOVER_COLOR}80`;
+            ctx.lineWidth = 2 / zoom;
+            ctx.setLineDash([2 / zoom, 2 / zoom]);
+            ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
             ctx.setLineDash([]);
-
-            if (resolved.type === 'circle' && typeof resolved.toGeometryPath === 'function') {
-                const path = resolved.toGeometryPath();
-                ctx.beginPath();
-                path.toCanvasPath(ctx);
-                ctx.stroke();
-            } else if (resolved.type === 'rectangle') {
-                ctx.strokeRect(resolved.x, resolved.y, resolved.width, resolved.height);
-            } else if (typeof resolved.toGeometryPath === 'function') {
-                const path = resolved.toGeometryPath();
-                ctx.beginPath();
-                path.toCanvasPath(ctx);
-                ctx.stroke();
-            } else {
-                // Fallback to bounding box
-                ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-            }
+            ctx.restore();
         });
     }
 
@@ -212,9 +209,9 @@ export class SelectionPass {
             // Render the hover point
             if (hoveredEdgePosition) {
                 renderPointOnEdge(ctx, hoveredEdgePosition, {
-                    radius: 6 / frame.viewport.zoom,
+                    radius: HANDLE_RADIUS / frame.viewport.zoom,
                     fillColor: HOVER_COLOR,
-                    strokeColor: HANDLE_FILL,
+                    strokeColor: HANDLE_FILL_COLOR,
                     strokeWidth: 2 / frame.viewport.zoom
                 });
             }
@@ -222,74 +219,134 @@ export class SelectionPass {
     }
 
     /**
-     * Draw corner brackets for selection outline.
+     * Dashed bounds outline, matching selectionSystem.drawSelectionOutline:
+     * selection colour at 25% alpha, 1px, dash [4, 4], drawn on the bounds
+     * with no inset.
      */
-    renderSelectionBrackets(frame, bounds) {
+    renderSelectionOutline(frame, bounds) {
         const { ctx } = frame;
-        const padding = 4;
-        const x = bounds.x - padding;
-        const y = bounds.y - padding;
-        const w = bounds.width + padding * 2;
-        const h = bounds.height + padding * 2;
-        const len = Math.min(16, Math.max(8, Math.min(w, h) * 0.12));
+        const zoom = frame.viewport.zoom;
 
         ctx.save();
-        ctx.strokeStyle = SELECTION_COLOR;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = `${SELECTION_COLOR}40`;
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 4 / zoom]);
+        ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        ctx.setLineDash([]);
+        ctx.restore();
+    }
+
+    /**
+     * The four corner handles (handleSystem.drawCornerHandles). Positions come
+     * from getResizeHandlePositions so hit-testing and drawing agree.
+     */
+    renderResizeHandles(frame, bounds) {
+        const { ctx } = frame;
+        const zoom = frame.viewport.zoom;
+
+        ctx.save();
+        ctx.setLineDash([]);
+        getResizeHandlePositions(bounds).forEach(({ x, y }) => {
+            drawHandle(ctx, x, y, zoom);
+        });
+        ctx.restore();
+    }
+
+    /**
+     * Group bounds + count badge for a multi-selection
+     * (selectionSystem.drawMultiSelectionOutline / drawSelectionCount).
+     */
+    renderMultiSelectionOutline(frame, selectedIds) {
+        const { ctx } = frame;
+        const zoom = frame.viewport.zoom;
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        selectedIds.forEach(shapeId => {
+            const shape = frame.scene.shapeStore.get(shapeId);
+            if (!shape) return;
+            const resolved = frame.bindingResolver.resolveShape(shape);
+            if (!resolved || typeof resolved.getBounds !== 'function') return;
+            const b = resolved.getBounds();
+            if (!b || !Number.isFinite(b.width) || !Number.isFinite(b.height)) return;
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
+        });
+        if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
+
+        // morphTo pads the group box by 10 screen px on every side.
+        const pad = 10 / zoom;
+        const x = minX - pad;
+        const y = minY - pad;
+        const w = (maxX - minX) + pad * 2;
+        const h = (maxY - minY) + pad * 2;
+
+        ctx.save();
+        ctx.strokeStyle = `${SELECTION_COLOR}60`;
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([8 / zoom, 4 / zoom]);
+        ctx.strokeRect(x, y, w, h);
         ctx.setLineDash([]);
 
-        // Top-left
-        ctx.beginPath();
-        ctx.moveTo(x, y + len);
-        ctx.lineTo(x, y);
-        ctx.lineTo(x + len, y);
-        ctx.stroke();
+        ctx.fillStyle = `${SELECTION_COLOR}10`;
+        ctx.fillRect(x, y, w, h);
 
-        // Top-right
-        ctx.beginPath();
-        ctx.moveTo(x + w - len, y);
-        ctx.lineTo(x + w, y);
-        ctx.lineTo(x + w, y + len);
-        ctx.stroke();
-
-        // Bottom-right
-        ctx.beginPath();
-        ctx.moveTo(x + w, y + h - len);
-        ctx.lineTo(x + w, y + h);
-        ctx.lineTo(x + w - len, y + h);
-        ctx.stroke();
-
-        // Bottom-left
-        ctx.beginPath();
-        ctx.moveTo(x + len, y + h);
-        ctx.lineTo(x, y + h);
-        ctx.lineTo(x, y + h - len);
-        ctx.stroke();
+        const countText = `${selectedIds.length} selected`;
+        const fontSize = 12 / zoom;
+        ctx.font = `${fontSize}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const textWidth = ctx.measureText(countText).width;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(x, y - 25 / zoom, textWidth + 10 / zoom, 20 / zoom);
+        ctx.fillStyle = 'white';
+        ctx.fillText(countText, x + 5 / zoom, y - 15 / zoom);
 
         ctx.restore();
     }
 
+    /**
+     * Rotation handle: a thin connector from the top edge up to a handle
+     * ROTATION_HANDLE_DISTANCE screen px away, with the small rotation glyph
+     * morphTo draws inside it (handleSystem.drawRotationHandle).
+     */
     renderRotationHandle(frame, bounds, rotation = 0) {
         const { ctx } = frame;
-        const { x, y, cx, cy } = getRotationHandlePosition(bounds, rotation, frame.viewport.zoom);
-        const radius = 6 / frame.viewport.zoom;
+        const zoom = frame.viewport.zoom;
+        const { x, y, ax, ay } = getRotationHandlePosition(bounds, rotation, zoom);
+        const radius = HANDLE_RADIUS / zoom;
 
         ctx.save();
-        ctx.strokeStyle = SELECTION_COLOR;
-        ctx.fillStyle = HANDLE_FILL;
-        ctx.lineWidth = 2 / frame.viewport.zoom;
+        ctx.setLineDash([]);
 
-        // Line from center to handle
+        // Connector from the top edge to the handle
         ctx.beginPath();
-        ctx.moveTo(cx, cy);
+        ctx.moveTo(ax, ay);
         ctx.lineTo(x, y);
+        ctx.strokeStyle = `${SELECTION_COLOR}60`;
+        ctx.lineWidth = 1 / zoom;
         ctx.stroke();
 
-        // Handle circle
+        drawHandle(ctx, x, y, zoom);
+
+        // Rotation glyph: a three-quarter arc with a small arrow head.
         ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(x, y, radius * 0.4, 0, Math.PI * 1.5);
+        ctx.strokeStyle = SELECTION_COLOR;
+        ctx.lineWidth = 1.5 / zoom;
         ctx.stroke();
+
+        const arrowSize = 2 / zoom;
+        ctx.beginPath();
+        ctx.moveTo(x - radius * 0.4, y);
+        ctx.lineTo(x - radius * 0.4 - arrowSize, y - arrowSize);
+        ctx.lineTo(x - radius * 0.4 - arrowSize, y + arrowSize);
+        ctx.stroke();
+
         ctx.restore();
     }
 
@@ -402,42 +459,30 @@ export class SelectionPass {
     renderPathHandles(frame, shape) {
         const { ctx } = frame;
         if (!shape.points || shape.points.length < 2) return;
-        const handleRadius = 5 / frame.viewport.zoom;
+        const zoom = frame.viewport.zoom;
         ctx.save();
-        ctx.lineWidth = 1.5 / frame.viewport.zoom;
-        ctx.strokeStyle = '#2196F3';
-        ctx.fillStyle = '#fff';
+        ctx.setLineDash([]);
+
+        const drawLeg = (point, offset) => {
+            const hx = point.x + offset.x;
+            const hy = point.y + offset.y;
+            // Connector, styled like morphTo's rotation-handle connector.
+            ctx.beginPath();
+            ctx.moveTo(point.x, point.y);
+            ctx.lineTo(hx, hy);
+            ctx.strokeStyle = `${SELECTION_COLOR}60`;
+            ctx.lineWidth = 1 / zoom;
+            ctx.stroke();
+            drawHandle(ctx, hx, hy, zoom, { radius: HANDLE_RADIUS * 0.8 });
+        };
 
         for (let i = 0; i < shape.points.length; i += 1) {
             const handles = shape.getHandles(i);
             if (!handles.handleIn && !handles.handleOut) continue;
             const point = shape.points[i];
 
-            if (handles.handleOut) {
-                const hx = point.x + handles.handleOut.x;
-                const hy = point.y + handles.handleOut.y;
-                ctx.beginPath();
-                ctx.moveTo(point.x, point.y);
-                ctx.lineTo(hx, hy);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(hx, hy, handleRadius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            }
-
-            if (handles.handleIn) {
-                const hx = point.x + handles.handleIn.x;
-                const hy = point.y + handles.handleIn.y;
-                ctx.beginPath();
-                ctx.moveTo(point.x, point.y);
-                ctx.lineTo(hx, hy);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(hx, hy, handleRadius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            }
+            if (handles.handleOut) drawLeg(point, handles.handleOut);
+            if (handles.handleIn) drawLeg(point, handles.handleIn);
         }
 
         ctx.restore();

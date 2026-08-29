@@ -19,8 +19,13 @@ import {
 import {
     getRotationHandlePosition,
     getResizeHandlePositions,
-    rotatePoint
+    rotatePoint,
+    HANDLE_RADIUS
 } from '../views/canvas/canvasGeometry.js';
+
+// morphTo tests handles with a circle of handleRadius + 3, so the grab area
+// tracks the 6px disc that is actually drawn.
+const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 3;
 
 export class HitTestService {
     /**
@@ -117,7 +122,7 @@ export class HitTestService {
         const bounds = resolved.getBounds();
         const rotation = Number(shape.rotation || 0);
         const handlePos = getRotationHandlePosition(bounds, rotation, this.vc.viewport.zoom);
-        const radius = 8 / this.vc.viewport.zoom;
+        const radius = HANDLE_HIT_RADIUS / this.vc.viewport.zoom;
         const dx = worldX - handlePos.x;
         const dy = worldY - handlePos.y;
         if (dx * dx + dy * dy <= radius * radius) {
@@ -142,9 +147,11 @@ export class HitTestService {
         if (!bounds || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) return null;
 
         const handles = getResizeHandlePositions(bounds);
-        const hitSize = 10 / this.vc.viewport.zoom;
+        const hitRadius = HANDLE_HIT_RADIUS / this.vc.viewport.zoom;
         for (const handle of handles) {
-            if (Math.abs(worldX - handle.x) <= hitSize && Math.abs(worldY - handle.y) <= hitSize) {
+            const dx = worldX - handle.x;
+            const dy = worldY - handle.y;
+            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
                 return { shapeId, handle: handle.name, bounds, strategy };
             }
         }

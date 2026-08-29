@@ -6,8 +6,18 @@
  * Ported from CanvasRenderer.renderHandleEditor(); the old render() only
  * called it when handleEditState was set, and the same guard lives here.
  *
+ * Styled from morphTo's handle palette: white discs with an orange ring and a
+ * 1px drop shadow (handleSystem.drawHandleAtPosition), joined to the anchor by
+ * the same faint connector morphTo uses for its rotation handle.
+ *
  * @module views/canvas/passes/HandleEditPass
  */
+import {
+    SELECTION_COLOR,
+    HANDLE_FILL_COLOR,
+    HANDLE_SHADOW_COLOR,
+    HANDLE_RADIUS
+} from '../canvasGeometry.js';
 
 export class HandleEditPass {
     /**
@@ -70,70 +80,51 @@ export class HandleEditPass {
             return;
         }
 
+        const zoom = frame.viewport.zoom;
+        const handleRadius = HANDLE_RADIUS / zoom;
+        const pointRadius = (HANDLE_RADIUS - 1) / zoom;
+        const shadowOffset = 0.5 / zoom;
+
         ctx.save();
-
-        // Style settings - make handles more visible
-        const handleLineColor = '#2196F3';
-        const handleFillColor = '#fff';
-        const handleStrokeColor = '#2196F3';
-        const pointColor = '#000';
-        const handleRadius = 6 / frame.viewport.zoom; // Scale with zoom for visibility
-        const pointRadius = 5 / frame.viewport.zoom;
-
-        // Draw handle lines and circles
-        ctx.lineWidth = 2 / frame.viewport.zoom; // Scale line width with zoom
-        ctx.strokeStyle = handleLineColor;
         ctx.setLineDash([]);
 
-        // Draw handleOut
-        if (handles.handleOut) {
-            const hx = point.x + handles.handleOut.x;
-            const hy = point.y + handles.handleOut.y;
+        const drawLeg = (offset) => {
+            const hx = point.x + offset.x;
+            const hy = point.y + offset.y;
 
-            // Line from point to handle
+            // Faint connector from the anchor to the handle
             ctx.beginPath();
             ctx.moveTo(point.x, point.y);
             ctx.lineTo(hx, hy);
+            ctx.strokeStyle = `${SELECTION_COLOR}60`;
+            ctx.lineWidth = 1 / zoom;
             ctx.stroke();
 
-            // Handle circle
+            // Drop shadow, white disc, orange ring
+            ctx.beginPath();
+            ctx.arc(hx + shadowOffset, hy + shadowOffset, handleRadius, 0, Math.PI * 2);
+            ctx.fillStyle = HANDLE_SHADOW_COLOR;
+            ctx.fill();
+
             ctx.beginPath();
             ctx.arc(hx, hy, handleRadius, 0, Math.PI * 2);
-            ctx.fillStyle = handleFillColor;
+            ctx.fillStyle = HANDLE_FILL_COLOR;
             ctx.fill();
-            ctx.strokeStyle = handleStrokeColor;
-            ctx.lineWidth = 2 / frame.viewport.zoom;
+            ctx.strokeStyle = SELECTION_COLOR;
+            ctx.lineWidth = 2 / zoom;
             ctx.stroke();
-        }
+        };
 
-        // Draw handleIn
-        if (handles.handleIn) {
-            const hx = point.x + handles.handleIn.x;
-            const hy = point.y + handles.handleIn.y;
+        if (handles.handleOut) drawLeg(handles.handleOut);
+        if (handles.handleIn) drawLeg(handles.handleIn);
 
-            // Line from point to handle
-            ctx.beginPath();
-            ctx.moveTo(point.x, point.y);
-            ctx.lineTo(hx, hy);
-            ctx.stroke();
-
-            // Handle circle
-            ctx.beginPath();
-            ctx.arc(hx, hy, handleRadius, 0, Math.PI * 2);
-            ctx.fillStyle = handleFillColor;
-            ctx.fill();
-            ctx.strokeStyle = handleStrokeColor;
-            ctx.lineWidth = 2 / frame.viewport.zoom;
-            ctx.stroke();
-        }
-
-        // Draw the anchor point (larger and more visible)
+        // The anchor itself is solid, so it reads as different from its handles
         ctx.beginPath();
         ctx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
-        ctx.fillStyle = pointColor;
+        ctx.fillStyle = SELECTION_COLOR;
         ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1 / frame.viewport.zoom;
+        ctx.strokeStyle = HANDLE_FILL_COLOR;
+        ctx.lineWidth = 1 / zoom;
         ctx.stroke();
 
         ctx.restore();

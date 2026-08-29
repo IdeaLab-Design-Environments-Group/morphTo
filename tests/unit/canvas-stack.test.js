@@ -235,3 +235,51 @@ test('touch gestures pan with one finger and pinch-zoom around two fingers', asy
     input.onTouchPointerUp(touch(1, 130, 115));
     assertEqual(input.touchPoints.size, 0, 'touch state clears after gesture');
 });
+
+test('selection handle geometry matches morphTo: 6px discs, rotation 35px above the top edge', async () => {
+    const {
+        getRotationHandlePosition,
+        getResizeHandlePositions,
+        HANDLE_RADIUS,
+        ROTATION_HANDLE_DISTANCE,
+        SELECTION_PADDING
+    } = await import('../../src/views/canvas/canvasGeometry.js');
+
+    assertEqual(HANDLE_RADIUS, 6, 'handle radius (morphTo handleSystem)');
+    assertEqual(ROTATION_HANDLE_DISTANCE, 35, 'rotation handle distance (morphTo handleSystem)');
+    assertEqual(SELECTION_PADDING, 0, 'morphTo insets the selection chrome by 0');
+
+    // 100x60 bounds centred on the origin.
+    const bounds = { x: -50, y: -30, width: 100, height: 60 };
+
+    const corners = getResizeHandlePositions(bounds);
+    const at = (name) => corners.find((h) => h.name === name);
+    for (const [name, x, y] of [['nw', -50, -30], ['ne', 50, -30], ['se', 50, 30], ['sw', -50, 30]]) {
+        const h = at(name);
+        assert(h, `${name} handle exists`);
+        assertEqual(h.x, x, `${name} handle x`);
+        assertEqual(h.y, y, `${name} handle y`);
+    }
+
+    // morphTo anchors the rotation handle above the TOP EDGE, not the centre.
+    const rot = getRotationHandlePosition(bounds, 0, 1);
+    assertEqual(rot.x, 0, 'rotation handle x is the top-edge centre');
+    assertEqual(rot.y, -65, 'rotation handle y is 35 above the top edge at zoom 1');
+    assertEqual(rot.ax, 0, 'connector anchor x');
+    assertEqual(rot.ay, -30, 'connector anchor y sits on the top edge');
+
+    // The offset is a screen-space constant, so it halves in world units at 2x.
+    const rot2 = getRotationHandlePosition(bounds, 0, 2);
+    assertEqual(rot2.y, -47.5, 'rotation handle stays 35 screen px away at zoom 2');
+});
+
+test('handle hit radius tracks the drawn disc', async () => {
+    const { HANDLE_RADIUS } = await import('../../src/views/canvas/canvasGeometry.js');
+    const source = await (await import('node:fs/promises'))
+        .readFile(new URL('../../src/services/HitTestService.js', import.meta.url), 'utf8');
+    assert(
+        source.includes('HANDLE_RADIUS + 3'),
+        'hit radius is derived from the drawn handle, as morphTo does (handleRadius + 3)'
+    );
+    assertEqual(HANDLE_RADIUS + 3, 9, 'grab radius is 9 world units at zoom 1');
+});

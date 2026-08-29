@@ -9,8 +9,31 @@
  * @module views/canvas/canvasGeometry
  */
 
-/** Padding in world units between a shape's bounds and its selection chrome. */
-export const SELECTION_PADDING = 4;
+/**
+ * Padding in world units between a shape's bounds and its selection chrome.
+ * morphTo draws its handles and bounds outline directly on the shape's
+ * bounds (selectionSystem.drawSelectionOutline / handleSystem.drawCornerHandles
+ * both use `bounds.x * scale` with no inset), so this is zero.
+ */
+export const SELECTION_PADDING = 0;
+
+/**
+ * morphTo's selection palette — the single source for every render pass.
+ * Values copied from src/renderer/selectionSystem.mjs and handleSystem.mjs
+ * in the reference app.
+ */
+export const SELECTION_COLOR = '#FF5722';
+export const HOVER_COLOR = '#FF6B35';
+export const HANDLE_FILL_COLOR = '#FFFFFF';
+export const HANDLE_SHADOW_COLOR = '#00000020';
+
+/**
+ * Handle geometry, in SCREEN pixels (constant under zoom, as in morphTo where
+ * handles are drawn in screen space). Divide by zoom to get world units.
+ */
+export const HANDLE_RADIUS = 6;
+export const HANDLE_HOVER_RADIUS = 7;
+export const ROTATION_HANDLE_DISTANCE = 35;
 
 /**
  * Rotate a point around a center by degrees.
@@ -49,14 +72,17 @@ export function withShapeRotation(ctx, bounds, rotation, drawFn) {
 }
 
 /**
- * Where the rotation handle sits for a selection: above the bounds center,
- * offset 24 screen pixels, rotated with the shape.
+ * Where the rotation handle sits for a selection: above the top edge,
+ * horizontally centred, offset ROTATION_HANDLE_DISTANCE screen pixels, rotated
+ * with the shape. Matches handleSystem.drawRotationHandle, which puts it at
+ * (offsetX + scaledWidth / 2, offsetY - rotationHandleDistance).
  *
  * @param {{x:number,y:number,width:number,height:number}} bounds
  * @param {number} rotation - Degrees.
  * @param {number} zoom - Current viewport zoom (converts px offset to world).
- * @returns {{x: number, y: number, cx: number, cy: number}} Handle position
- *   plus the rotation center.
+ * @returns {{x: number, y: number, cx: number, cy: number, ax: number, ay: number}}
+ *   Handle position, the rotation center, and the connector anchor on the top
+ *   edge (morphTo runs its connector line from the top edge, not the center).
  */
 export function getRotationHandlePosition(bounds, rotation, zoom) {
     const padding = SELECTION_PADDING;
@@ -65,20 +91,24 @@ export function getRotationHandlePosition(bounds, rotation, zoom) {
     const w = bounds.width + padding * 2;
     const cx = x + w / 2;
     const cy = y + (bounds.height + padding * 2) / 2;
-    const handleOffset = 24 / zoom;
+    const handleOffset = ROTATION_HANDLE_DISTANCE / zoom;
     const baseX = cx;
     const baseY = y - handleOffset;
 
     if (!rotation) {
-        return { x: baseX, y: baseY, cx, cy };
+        return { x: baseX, y: baseY, cx, cy, ax: cx, ay: y };
     }
 
     const rad = (rotation * Math.PI) / 180;
-    const dx = baseX - cx;
-    const dy = baseY - cy;
-    const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
-    const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
-    return { x: cx + rx, y: cy + ry, cx, cy };
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const spin = (px, py) => ({
+        x: cx + (px - cx) * cos - (py - cy) * sin,
+        y: cy + (px - cx) * sin + (py - cy) * cos
+    });
+    const handle = spin(baseX, baseY);
+    const anchor = spin(cx, y);
+    return { x: handle.x, y: handle.y, cx, cy, ax: anchor.x, ay: anchor.y };
 }
 
 /**
