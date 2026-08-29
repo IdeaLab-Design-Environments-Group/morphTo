@@ -74,23 +74,59 @@ export class Application {
     }
 
     /**
-     * Initialize the application
+     * Element ids the app mounts into. A host with different markup passes an
+     * override map to {@link Application#init} rather than renaming its own
+     * DOM to match — that is how morphTo's shell hosts this engine.
+     * @type {Object.<string, string>}
      */
-    init() {
-        // Get DOM elements
-        const tabBarContainer = document.getElementById('tab-bar-container');
-        const shapeLibraryContainer = document.getElementById('shape-library-container');
-        const canvasElement = document.getElementById('main-canvas');
-        const parametersMenuContainer = document.getElementById('parameters-menu-container');
-        const propertiesPanelContainer = document.getElementById('properties-panel-container');
-        const coachButton = document.getElementById('btn-ai-coach');
-        const zoomControlsContainer = document.getElementById('zoom-controls-container');
-        const blocklyContainer = document.getElementById('blockly-container');
-        const codeEditorContainer = document.getElementById('code-editor-container');
+    static DEFAULT_ELEMENT_IDS = {
+        tabBar: 'tab-bar-container',
+        shapeLibrary: 'shape-library-container',
+        canvas: 'main-canvas',
+        parametersMenu: 'parameters-menu-container',
+        propertiesPanel: 'properties-panel-container',
+        coachButton: 'btn-ai-coach',
+        zoomControls: 'zoom-controls-container',
+        blockly: 'blockly-container',
+        codeEditor: 'code-editor-container',
+        notificationRegion: 'notification-region',
+        canvasStatus: 'canvas-status'
+    };
 
-        if (!tabBarContainer || !shapeLibraryContainer || !canvasElement ||
-            !parametersMenuContainer || !propertiesPanelContainer || !zoomControlsContainer || !blocklyContainer) {
-            throw new Error('Required DOM elements not found');
+    /**
+     * Initialize the application.
+     * @param {Object.<string, string>} [elementIds] - Partial override of
+     *   {@link Application.DEFAULT_ELEMENT_IDS}, keyed the same way.
+     */
+    init(elementIds = {}) {
+        // Get DOM elements
+        this.elementIds = { ...Application.DEFAULT_ELEMENT_IDS, ...elementIds };
+        const byId = (key) => document.getElementById(this.elementIds[key]);
+
+        const tabBarContainer = byId('tabBar');
+        const shapeLibraryContainer = byId('shapeLibrary');
+        const canvasElement = byId('canvas');
+        const parametersMenuContainer = byId('parametersMenu');
+        const propertiesPanelContainer = byId('propertiesPanel');
+        const coachButton = byId('coachButton');
+        const zoomControlsContainer = byId('zoomControls');
+        const blocklyContainer = byId('blockly');
+        const codeEditorContainer = byId('codeEditor');
+
+        const required = {
+            tabBar: tabBarContainer,
+            shapeLibrary: shapeLibraryContainer,
+            canvas: canvasElement,
+            parametersMenu: parametersMenuContainer,
+            propertiesPanel: propertiesPanelContainer,
+            zoomControls: zoomControlsContainer,
+            blockly: blocklyContainer
+        };
+        const missing = Object.keys(required).filter(key => !required[key]);
+        if (missing.length) {
+            // Name the ids so a host with mismatched markup can see which.
+            const ids = missing.map(key => `${key} (#${this.elementIds[key]})`).join(', ');
+            throw new Error(`Required DOM elements not found: ${ids}`);
         }
 
         // Get current scene state
@@ -160,7 +196,8 @@ export class Application {
         if (this.blocksEditor && this.codeEditor) {
             this.editorSyncConnector = new EditorSyncConnector({
                 codeEditor: this.codeEditor,
-                blocksEditor: this.blocksEditor
+                blocksEditor: this.blocksEditor,
+                isBlocksAuthoritative: () => this.isBlocksEditorActive()
             });
             this.editorSyncConnector.connect();
         }
@@ -229,8 +266,8 @@ export class Application {
         });
 
         // Accessibility: wire the live regions for status + selection.
-        this.liveRegion = new LiveRegion(document.getElementById('notification-region'));
-        this.canvasStatus = new LiveRegion(document.getElementById('canvas-status'));
+        this.liveRegion = new LiveRegion(byId('notificationRegion'));
+        this.canvasStatus = new LiveRegion(byId('canvasStatus'));
         this.setupCanvasAnnouncements();
 
         // Setup event listeners
@@ -431,6 +468,17 @@ export class Application {
     /**
      * Setup left panel tab switching between library and blocks
      */
+    /**
+     * Whether the blocks workspace is the editor the user is currently
+     * driving. Hosts that show blocks and code side by side leave this true;
+     * a host that toggles between them overrides `isBlocksEditorActive` (see
+     * MorphToShell) so a hidden workspace never writes to the source.
+     * @returns {boolean}
+     */
+    isBlocksEditorActive() {
+        return true;
+    }
+
     setupLeftPanelTabs() {
         const tabButtons = Array.from(document.querySelectorAll('.panel-tab'));
         const tabPanels = Array.from(document.querySelectorAll('.panel-content-tab'));

@@ -41,6 +41,16 @@ export class CodeEditor extends Component {
         this.shapeCodeRanges = new Map();
         this._editorBoundTo = null;
         this.lastCodeEditAt = 0;
+        /**
+         * Optional hooks fired around a code-driven scene rebuild, so a
+         * mediator can mute listeners that would otherwise mirror the
+         * resulting shape events back into the source. Set by
+         * EditorSyncConnector.
+         * @type {?() => void}
+         */
+        this.onSceneRebuildStart = null;
+        /** @type {?() => void} */
+        this.onSceneRebuildEnd = null;
     }
 
     render() {
@@ -420,6 +430,13 @@ export class CodeEditor extends Component {
     /**
      * Run the code in the editor
      */
+    /**
+     * Run the editor contents, wrapped in one undoable ReplaceSceneCommand.
+     * @param {{silentIfEmpty?: boolean}} [options]
+     * @returns {{success: boolean, error?: string, empty?: boolean,
+     *   shapesCreated?: number, parametersCreated?: number}} Run result — the
+     *   host shell reads this to drive its own error/status UI.
+     */
     runCode({ silentIfEmpty = false } = {}) {
         const code = this.editor ? this.editor.getValue().trim() : '';
 
@@ -427,7 +444,7 @@ export class CodeEditor extends Component {
             if (!silentIfEmpty) {
                 this.showOutput('No code to run', 'warning');
             }
-            return;
+            return { success: true, empty: true, shapesCreated: 0, parametersCreated: 0 };
         }
 
         this.showOutput('Running...', 'info');
@@ -440,8 +457,14 @@ export class CodeEditor extends Component {
 
             // Avoid scene->code feedback loops while applying code
             this.isApplyingCode = true;
-            const result = this.codeRunner.run(code, { clearExisting: true });
-            this.isApplyingCode = false;
+            this.onSceneRebuildStart?.();
+            let result;
+            try {
+                result = this.codeRunner.run(code, { clearExisting: true });
+            } finally {
+                this.onSceneRebuildEnd?.();
+                this.isApplyingCode = false;
+            }
 
             if (command && result.success) {
                 command.captureAfter(this.context.scene);
@@ -464,9 +487,12 @@ export class CodeEditor extends Component {
             } else {
                 this.showOutput(`✗ Error: ${result.error}`, 'error');
             }
+
+            return result;
         } catch (error) {
             this.isApplyingCode = false;
             this.showOutput(`✗ Error: ${error.message}`, 'error');
+            return { success: false, error: error.message };
         }
     }
 

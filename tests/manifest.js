@@ -9,6 +9,7 @@ export const TEST_MODULES = [
     './unit/canvas-stack.test.js',
     './unit/commands.test.js',
     './unit/depth.test.js',
+    './unit/editor-sync.test.js',
     './unit/plugin-lifecycle.test.js',
     './unit/coach.test.js',
     './unit/joinery.test.js'

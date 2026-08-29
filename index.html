@@ -26,7 +26,6 @@
   <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
   <script src="https://unpkg.com/blockly/msg/en.js"></script>
 
-  <script src="./src/blocks-umd.js"></script>
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="./src/styles.css">
@@ -783,6 +782,9 @@
   </div>
 
   <!-- Editor Tab -->
+  <div id="notification-region" role="status" aria-live="polite" class="visually-hidden"></div>
+  <div id="canvas-status" role="status" aria-live="polite" class="visually-hidden"></div>
+
   <div class="tab-content" id="editor-tab">
     <div class="main-content">
       <div class="editor-panel">
@@ -806,6 +808,25 @@
       
       <div class="visualization-panel">
         <canvas id="canvas"></canvas>
+
+        <!-- Shape palette: header is ours, the grid is mounted by ShapeLibrary -->
+        <button class="palette-toggle-button" id="palette-toggle" type="button" title="Toggle Shape Palette">⊞</button>
+        <div class="shape-palette-container" id="shape-palette">
+          <div class="palette-header">
+            <h3>Shape Palette</h3>
+            <button class="close-palette" id="palette-close" type="button">×</button>
+          </div>
+          <div class="palette-content" id="shape-library-container"></div>
+        </div>
+
+        <!-- Inspector popup: Properties above Parameters, toggled from the footer -->
+        <div class="parameters-container" id="inspector-panel">
+          <div id="properties-panel-container"></div>
+          <div id="parameters-menu-container"></div>
+        </div>
+
+        <div class="zoom-controls-container" id="zoom-controls-container"></div>
+
         <div class="keyboardShortcuts">
           <strong>Keyboard Shortcuts:</strong> Delete to remove • Arrow keys to move • R to rotate • ; to toggle grid • Scroll to pan • Ctrl/⌘ + scroll to zoom
         </div>
@@ -827,6 +848,8 @@
         Errors
         <span class="error-count" id="error-count">0</span>
       </button>
+      <button class="button" id="params-button">Parameters</button>
+      <button class="button" id="btn-ai-coach" title="AI Fabrication Coach">&#10022; AI</button>
       <div class="export-container">
         <button class="button" id="export-button">Export ▼</button>
         <div class="export-menu" id="export-menu">
@@ -1037,6 +1060,6 @@
   <script src="./src/tutorials.js"></script>
 
   <!-- Main application script -->
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -192,6 +192,37 @@ export class BlocksEditor extends Component {
     }
 
 
+    /**
+     * Suppress (or restore) the scene → blocks mirroring driven by
+     * SHAPE_ADDED / SHAPE_REMOVED.
+     *
+     * That mirroring exists for shapes created on the canvas. A run started
+     * from the text editor must switch it off: the shapes it emits already
+     * have an authoritative source — the code — and rebuilding blocks from
+     * the scene objects instead loses information (center-based shapes carry
+     * centerX/centerY, not x/y, so their position would regenerate as 0,0).
+     * The connector re-syncs the workspace from the source afterwards.
+     *
+     * @param {boolean} suppressed
+     */
+    /**
+     * Clear the workspace-event guard once Blockly has flushed its queue.
+     *
+     * Blockly fires change events on a later task, so a programmatic rebuild
+     * that clears the guard synchronously in a `finally` still sees its own
+     * events arrive afterwards — and they are indistinguishable from a user
+     * edit, so the generated code overwrites the source it was built from.
+     */
+    _releaseWorkspaceSuppressionSoon() {
+        setTimeout(() => {
+            this._suppressWorkspaceEvents = false;
+        }, 0);
+    }
+
+    setShapeSyncSuppressed(suppressed) {
+        this._suppressShapeEvents = Boolean(suppressed);
+    }
+
     setCodeChangeHandler(handler) {
         this._codeChangeHandler = typeof handler === 'function' ? handler : null;
     }
@@ -730,7 +761,7 @@ export class BlocksEditor extends Component {
                 this.workspace.clear();
             } finally {
                 window.Blockly.Events && window.Blockly.Events.enable();
-                this._suppressWorkspaceEvents = false;
+                this._releaseWorkspaceSuppressionSoon();
             }
             return true;
         }
@@ -761,7 +792,7 @@ export class BlocksEditor extends Component {
             });
         } finally {
             if (window.Blockly.Events) window.Blockly.Events.enable();
-            this._suppressWorkspaceEvents = false;
+            this._releaseWorkspaceSuppressionSoon();
         }
 
         window.Blockly.svgResize(this.workspace);

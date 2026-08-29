@@ -1678,3 +1678,27 @@ body {
 
 .example-blockly-viewer .blocklyMainBackground { cursor: grab; }
 .example-blockly-viewer .blocklyMainBackground:active { cursor: grabbing; }
+
+/* ── Engine mount points ───────────────────────────────────────────────── */
+
+/* Off-screen live regions: announced by assistive tech, never painted. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Host for ZoomControls; the controls carry their own positioning. */
+.zoom-controls-container {
+  position: absolute;
+  right: 16px;
+  bottom: 56px;
+  z-index: 900;
+}
