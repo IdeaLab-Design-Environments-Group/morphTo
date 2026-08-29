@@ -2,7 +2,7 @@
  * Geometric constraints: the language records `constraints { }` blocks and
  * morphTo's Newton-Raphson solver resolves them against the shape store.
  */
-import { test, assert, assertEqual } from '../harness.js';
+import { test, assert, assertEqual, assertApprox } from '../harness.js';
 import { TabManager } from '../../src/core/TabManager.js';
 import { SceneContext } from '../../src/core/SceneContext.js';
 import { ShapeRegistry } from '../../src/models/shapes/ShapeRegistry.js';
@@ -10,6 +10,10 @@ import { CodeRunner } from '../../src/programming/CodeRunner.js';
 import { ConstraintController } from '../../src/constraints/ConstraintController.js';
 import { shapeCenter, createSceneAdapter } from '../../src/constraints/sceneAdapter.js';
 import { ConstraintsPass, glyphLabel, formatNum } from '../../src/views/canvas/passes/ConstraintsPass.js';
+import { Coincident, Distance, Horizontal, Vertical } from '../../src/constraints/constraints.mjs';
+import { valder, power } from '../../src/math/autodiff.mjs';
+import { evaluate } from '../../src/math/evaluate.mjs';
+import { solveSystem } from '../../src/math/solveSystem.mjs';
 
 function makeContext() {
     const tabManager = new TabManager();
@@ -309,4 +313,333 @@ test('a null source leaves the pass inert', () => {
     const pass = new ConstraintsPass(null);
     pass.render(glyphFrame(makeGlyphCtx()));
     assertEqual(pass.markers.length, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * The pooled solve, and the two solver bugs it depended on.
+ * ------------------------------------------------------------------ */
+
+test('two constraints sharing a shape are satisfied together, not in turn', () => {
+    const context = makeContext();
+    ShapeRegistry.resetIdCounters();
+    const a = ShapeRegistry.create('rectangle', { x: 0, y: 0 }, { width: 40, height: 40 }, context.shapeStore);
+    const b = ShapeRegistry.create('rectangle', { x: 0, y: 0 }, { width: 40, height: 40 }, context.shapeStore);
+    const c = ShapeRegistry.create('rectangle', { x: 0, y: 0 }, { width: 40, height: 40 }, context.shapeStore);
+    context.shapeStore.add(a); context.shapeStore.add(b); context.shapeStore.add(c);
+    b.translate(300, 200); c.translate(-150, 90);
+
+    const controller = new ConstraintController(context).refresh();
+    const at = shape => ({ shape: String(shape.id), anchor: 'center' });
+    controller.addConstraint({ type: 'horizontal', a: at(a), b: at(b) });
+    controller.addConstraint({ type: 'vertical', a: at(b), b: at(c) });
+    // B is shared: solving one at a time leaves only the last one satisfied.
+    controller.engine.applyAllConstraints();
+
+    const dy = Math.abs(shapeCenter(b).y - shapeCenter(a).y);
+    const dx = Math.abs(shapeCenter(c).x - shapeCenter(b).x);
+    assert(dy < 1e-3, `horizontal still satisfied, dy=${dy}`);
+    assert(dx < 1e-3, `vertical satisfied, dx=${dx}`);
+});
+
+test('an AQUI block of two constraints solves as one undoable step', () => {
+    const context = makeContext();
+    ShapeRegistry.resetIdCounters();
+    const runner = new CodeRunner({
+        shapeStore: context.shapeStore,
+        parameterStore: context.parameterStore
+    });
+    const result = runner.run([
+        'shape rectangle plate { width: 100 height: 60 position: [0, 0] }',
+        'shape circle hole { radius: 10 position: [220, 140] }',
+        'shape circle peg { radius: 8 position: [-90, 310] }',
+        'constraints {',
+        '  horizontal plate.center hole.center',
+        '  vertical hole.center peg.center',
+        '}'
+    ].join('\n'), { clearExisting: true });
+    assert(result.success, result.error);
+
+    const get = id => context.shapeStore.getAll().find(s => s.id === id);
+    const before = ['plate', 'hole', 'peg'].map(id => shapeCenter(get(id)));
+
+    const controller = new ConstraintController(context);
+    assertEqual(controller.syncFromRun(result), 2, 'both constraints installed');
+
+    assert(Math.abs(shapeCenter(get('hole')).y - shapeCenter(get('plate')).y) < 1e-3, 'horizontal solved');
+    assert(Math.abs(shapeCenter(get('peg')).x - shapeCenter(get('hole')).x) < 1e-3, 'vertical solved');
+
+    assertEqual(context.history.stack.length, 1, 'the whole solve is one history entry');
+    assertEqual(context.history.stack[0].constructor.name, 'MutateShapesCommand');
+
+    context.history.undo(context.scene);
+    ['plate', 'hole', 'peg'].forEach((id, i) => {
+        const now = shapeCenter(get(id));
+        assert(Math.hypot(now.x - before[i].x, now.y - before[i].y) < 1e-6,
+            `undo restores ${id}, off by ${Math.hypot(now.x - before[i].x, now.y - before[i].y)}`);
+    });
+});
+
+test('power differentiates negative exponents as x^-n, not x^(n-2)', () => {
+    for (const x of [2.5, -1.75, 0.4]) {
+        for (const n of [-4, -3, -2, -1, 0, 1, 2, 3, 4]) {
+            const r = power(valder(x, [1]), n);
+            assertApprox(r.val, x ** n, 1e-9 * Math.max(1, Math.abs(x ** n)), `${x}^${n}`);
+            const der = n === 0 ? 0 : n * x ** (n - 1);
+            assertApprox(r.der[0], der, 1e-9 * Math.max(1, Math.abs(der)), `d/dx ${x}^${n}`);
+        }
+    }
+});
+
+test('every residual type differentiates to its finite difference', () => {
+    const vars = { xa: 13.7, ya: -4.25, xb: -6.5, yb: 9.125 };
+    const keys = Object.keys(vars);
+    const eqs = [
+        ...new Coincident({}, {}).getEqs('xa', 'ya', 'xb', 'yb'),
+        ...new Distance({}, {}, 37.5).getEqs('xa', 'ya', 'xb', 'yb'),
+        ...new Horizontal({}, {}).getEqs('xa', 'ya', 'xb', 'yb'),
+        ...new Vertical({}, {}).getEqs('xa', 'ya', 'xb', 'yb')
+    ];
+    for (const eq of eqs) {
+        const { der } = evaluate(eq, vars);
+        keys.forEach((k, i) => {
+            const h = Math.max(1e-6, Math.abs(vars[k]) * 1e-6);
+            const fd = (evaluate(eq, { ...vars, [k]: vars[k] + h }).val
+                      - evaluate(eq, { ...vars, [k]: vars[k] - h }).val) / (2 * h);
+            assertApprox(der[i], fd, 1e-6 * Math.max(1, Math.abs(fd)), `d(${eq})/d${k}`);
+        });
+    }
+});
+
+test('a pinned variable substitutes by whole name, not by prefix', () => {
+    // xcenter_plate pinned to 52; xcenter_plate2, which it is a prefix of,
+    // must survive as a variable rather than becoming the literal "(52)2".
+    const [satisfied, out] = solveSystem(
+        ['xcenter_plate - xcenter_plate2 + 10'],
+        { xcenter_plate: 52, xcenter_plate2: 0 },
+        { forwardSubs: { xcenter_plate: '(52)' } }
+    );
+    assert(satisfied.every(Boolean), 'the substituted system is solvable at all');
+    assertApprox(out.xcenter_plate2, 62, 1e-2, 'solved for the longer name');
+});
+
+test('a pinned name made of regex metacharacters is escaped, not matched as a pattern', () => {
+    const [, out] = solveSystem(
+        ['x$a.b(c) - yq'],
+        { 'x$a.b(c)': 7, yq: 0 },
+        { forwardSubs: { 'x$a.b(c)': '(7)' } }
+    );
+    // 1e-2, not 1e-5: levenbergMarquardt's epsilon bounds the squared error,
+    // so a single residual is only guaranteed to sqrt(2 * epsilon) ~= 4.5e-3.
+    assertApprox(out.yq, 7, 1e-2, 'the metacharacter name was substituted literally');
+});
+
+test('a non-finite system is refused rather than looped on forever', () => {
+    // Every convergence test in levenbergMarquardt compares false against NaN,
+    // and no step is ever accepted, so without the guard this never returns.
+    const started = Date.now();
+    const [satisfied, out] = solveSystem(['xa - xb'], { xa: NaN, xb: 0 }, {});
+    assert(Date.now() - started < 5000, 'terminated');
+    assertEqual(satisfied[0], false, 'reported unsatisfied');
+    assertEqual(out.xb, 0, 'the geometry is left where it was');
+});
+
+test('radial anchors land on the shape geometry, not on its bounding box', () => {
+    const context = makeContext();
+    ShapeRegistry.resetIdCounters();
+    // An odd-sided polygon's declared centre and bbox centre differ, so an
+    // anchor measured from the bbox misses every vertex.
+    const poly = ShapeRegistry.create('polygon', { x: 0, y: 0 }, { radius: 50, sides: 5 }, context.shapeStore);
+    const gear = ShapeRegistry.create('gear', { x: 0, y: 0 }, { pitchDiameter: 80, teeth: 12 }, context.shapeStore);
+    context.shapeStore.add(poly); context.shapeStore.add(gear);
+    poly.translate(137, -91); gear.translate(137, -91);
+
+    const engine = new ConstraintController(context).refresh().engine;
+    const vertices = shape => {
+        const path = shape.toGeometryPath();
+        const out = [];
+        for (const sub of (path.allPaths?.() ?? [path])) {
+            for (const anchor of (sub.anchors ?? [])) {
+                const p = anchor.position ?? anchor;
+                if (Number.isFinite(p?.x)) out.push(p);
+            }
+        }
+        return out;
+    };
+
+    const polyPoints = vertices(poly);
+    const bbox = poly.getBounds();
+    assert(Math.abs(poly.centerY - (bbox.y + bbox.height / 2)) > 1,
+        'the pentagon really does sit off its bbox centre');
+    for (let i = 0; i < 5; i++) {
+        const w = engine.getAnchorWorld(String(poly.id), `poly_v${i}`);
+        const nearest = Math.min(...polyPoints.map(p => Math.hypot(p.x - w.x, p.y - w.y)));
+        assert(nearest < 1e-6, `poly_v${i} sits on a real vertex, off by ${nearest}`);
+    }
+
+    // A gear carries no radius; its compass points ride the pitch circle,
+    // which lies between the root and tip radii rather than collapsing to 0.
+    const east = engine.getAnchorWorld(String(gear.id), 'circ_e');
+    assertApprox(Math.hypot(east.x - gear.centerX, east.y - gear.centerY), 40, 1e-6, 'pitch radius');
+    const radii = vertices(gear).map(p => Math.hypot(p.x - gear.centerX, p.y - gear.centerY));
+    assert(Math.min(...radii) < 40 && Math.max(...radii) > 40, 'the pitch circle is inside the teeth');
+});
+
+/**
+ * The builder half of the panel: morphTo's `constraints { }` blocks are one
+ * write path into the solver, and these three sections are the other. Driven
+ * against the real `index.html` panel markup (parsed by mini-dom) rather than
+ * a fixture, so the panel losing its container fails here.
+ */
+
+/** Parse index.html and install it as the document, for `body`. */
+async function onPanel(body) {
+    if (typeof process === 'undefined' || typeof window !== 'undefined') return;
+    const { readFileSync } = await import('node:fs');
+    const { parseHTML, MiniEvent } = await import('../mini-dom.js');
+    const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const doc = parseHTML(html);
+    const outer = globalThis.document;
+    globalThis.document = doc;
+    try {
+        return await body({ doc, MiniEvent });
+    } finally {
+        if (outer === undefined) delete globalThis.document; else globalThis.document = outer;
+    }
+}
+
+/** A scene with two shapes, and a controller attached to the real panel. */
+function attachBuilder(doc) {
+    const context = makeContext();
+    ShapeRegistry.resetIdCounters();
+    const rect = ShapeRegistry.create('rectangle', { x: 0, y: 0 }, { width: 100, height: 60 }, context.shapeStore);
+    const circle = ShapeRegistry.create('circle', { x: 0, y: 0 }, { radius: 20 }, context.shapeStore);
+    context.shapeStore.add(rect); context.shapeStore.add(circle);
+    circle.translate(200, 130);
+
+    const controller = new ConstraintController(context);
+    controller.attachList(doc.getElementById('constraints-list'));
+    const panel = doc.getElementById('constraints-panel');
+    controller.togglePanel(panel);
+    return { context, rect, circle, controller, panel };
+}
+
+/** Point one builder section at two anchors, as a user's clicks would. */
+function pickPair(section, MiniEvent, a, b) {
+    section.shapes[0].value = a.shape;
+    section.shapes[0].dispatchEvent(new MiniEvent('change'));
+    section.shapes[1].value = b.shape;
+    section.shapes[1].dispatchEvent(new MiniEvent('change'));
+    section.anchors[0].value = a.anchor;
+    section.anchors[1].value = b.anchor;
+}
+
+test('the constraints panel carries a builder with all three sections', async () => {
+    await onPanel(({ doc }) => {
+        const { controller, panel, rect, circle } = attachBuilder(doc);
+
+        const builder = panel.querySelector('#constraints-builder');
+        assert(builder, 'the builder is rendered into #constraints-panel');
+        assertEqual(controller.builderSections.length, 3, 'Coincident, Distance, Horizontal/Vertical');
+        const titles = builder.children.filter(c => c.style.fontWeight === 'bold').map(c => c.textContent);
+        assertEqual(titles.join('|'), 'Coincident|Distance|Horizontal / Vertical', 'section titles');
+        assertEqual(builder.querySelectorAll('button').length, 4, 'coincident, distance, horizontal, vertical');
+        assertEqual(builder.querySelectorAll('hr').length, 3, 'ui.mjs separated the sections with rules');
+
+        // The builder sits above the 'Active Constraints' list, as in ui.mjs.
+        assertEqual(panel.firstElementChild, builder, 'builder first in the panel');
+
+        for (const section of controller.builderSections) {
+            for (const shapeSelect of section.shapes) {
+                const names = shapeSelect.children.map(o => o.value);
+                assertEqual(names.join(','), `${rect.id},${circle.id}`, 'every scene shape is offered');
+            }
+            // Anchors come from the engine's catalogue for the selected shape,
+            // which is the rectangle here: corners, edge midpoints, centre.
+            const anchors = section.anchors[0].children.map(o => o.value);
+            assert(anchors.includes('center'), `rectangle anchors offered, got ${anchors.join(',')}`);
+            assert(anchors.length > 1, 'more than the fallback centre');
+        }
+    });
+});
+
+test('the builder offers the live anchor catalogue when the shape changes', async () => {
+    await onPanel(({ doc, MiniEvent }) => {
+        const { controller, circle } = attachBuilder(doc);
+        const section = controller.builderSections[0];
+        section.shapes[0].value = String(circle.id);
+        section.shapes[0].dispatchEvent(new MiniEvent('change'));
+
+        const offered = section.anchors[0].children.map(o => o.value);
+        const catalogue = controller.anchorsFor(String(circle.id)).map(a => a.key);
+        assertEqual(offered.join(','), catalogue.join(','), 'getAnchorsForShape, not a reimplementation');
+        assertEqual(section.anchors[0].value, catalogue[0], 'the first anchor is selected');
+    });
+});
+
+test('the coincident button creates, solves and records one undoable command', async () => {
+    await onPanel(async ({ doc, MiniEvent }) => {
+        const { controller, context, rect, circle, panel } = attachBuilder(doc);
+        const before = shapeCenter(circle);
+        assert(distance(rect, circle) > 1, 'the shapes start apart');
+
+        pickPair(controller.builderSections[0], MiniEvent,
+            { shape: String(rect.id), anchor: 'center' },
+            { shape: String(circle.id), anchor: 'center' });
+        panel.querySelector('#constraints-builder').querySelectorAll('button')[0]
+            .dispatchEvent(new MiniEvent('click'));
+
+        assertEqual(controller.list().length, 1, 'the constraint was added');
+        assert(distance(rect, circle) < 0.05, `and solved, got ${distance(rect, circle)}`);
+
+        // The list rows morphTo drew are rendered for it.
+        assertEqual(doc.getElementById('constraints-list').children.length, 1, 'one row');
+
+        await context.history.undo();
+        // undo replaces the shape in the store with one rebuilt from the
+        // snapshot, so the restored geometry is read back off the store.
+        const after = shapeCenter(context.shapeStore.get(circle.id));
+        assertApprox(after.x, before.x, 1e-6, 'undo restored the pre-solve x');
+        assertApprox(after.y, before.y, 1e-6, 'undo restored the pre-solve y');
+    });
+});
+
+test('the distance button applies the typed separation, and refuses a bad one', async () => {
+    await onPanel(({ doc, MiniEvent }) => {
+        const { controller, rect, circle, panel } = attachBuilder(doc);
+        const section = controller.builderSections[1];
+        pickPair(section, MiniEvent,
+            { shape: String(rect.id), anchor: 'center' },
+            { shape: String(circle.id), anchor: 'center' });
+
+        const builder = panel.querySelector('#constraints-builder');
+        const distanceInput = builder.querySelectorAll('input')[0];
+        const apply = builder.querySelectorAll('button')[1];
+
+        distanceInput.value = '-5';
+        apply.dispatchEvent(new MiniEvent('click'));
+        assertEqual(controller.list().length, 0, 'a negative distance is refused');
+
+        distanceInput.value = '150';
+        apply.dispatchEvent(new MiniEvent('click'));
+        assertEqual(controller.list().length, 1, 'the constraint was added');
+        assertApprox(distance(rect, circle), 150, 0.05, 'solved to the typed distance');
+    });
+});
+
+test('the horizontal and vertical buttons each create their own constraint', async () => {
+    await onPanel(({ doc, MiniEvent }) => {
+        const { controller, rect, circle, panel } = attachBuilder(doc);
+        const buttons = panel.querySelector('#constraints-builder').querySelectorAll('button');
+        pickPair(controller.builderSections[2], MiniEvent,
+            { shape: String(rect.id), anchor: 'center' },
+            { shape: String(circle.id), anchor: 'center' });
+
+        buttons[2].dispatchEvent(new MiniEvent('click'));
+        assertEqual(controller.list().length, 1, 'horizontal added');
+        assertApprox(shapeCenter(rect).y, shapeCenter(circle).y, 0.05, 'and solved');
+
+        buttons[3].dispatchEvent(new MiniEvent('click'));
+        assertEqual(controller.list().length, 2, 'vertical added alongside it');
+        assertApprox(shapeCenter(rect).x, shapeCenter(circle).x, 0.05, 'and solved');
+    });
 });

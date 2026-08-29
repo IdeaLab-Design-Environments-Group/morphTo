@@ -11,11 +11,13 @@
  * Solves go through the command history, which morphTo's original never did:
  * constraint solving is undoable here.
  *
- * It also owns the constraints list panel. morphTo built that list in
- * `src/constraints/ui.mjs` (`window.updateConstraintsMenu`); `renderList`
- * below reproduces its markup exactly — an inline-styled flex row per
- * constraint carrying the engine's label and a red '✕' delete button — and
- * the container styling ui.mjs applied to the list element itself.
+ * It also owns the constraints panel. morphTo built that panel in
+ * `src/constraints/ui.mjs`: a builder — three sections of paired shape and
+ * anchor selects — over a list of active constraints. `renderBuilder` and
+ * `renderList` below reproduce both, markup and inline styling included,
+ * with each create button wired to `addConstraint`. The builder is the only
+ * interactive way to author a constraint; without it constraints can arrive
+ * only from a typed `constraints { }` block.
  *
  * @module constraints/ConstraintController
  */
@@ -23,6 +25,47 @@
 import { ConstraintEngine } from './engine.mjs';
 import { createSceneAdapter } from './sceneAdapter.js';
 import { MutateShapesCommand } from '../commands/shapeCommands.js';
+
+/**
+ * The builder's DOM helpers, lifted from morphTo's `src/constraints/ui.mjs`
+ * (lines 14-20) unchanged: it styled every control inline rather than through
+ * the stylesheet, and the popup only looks right if that is preserved.
+ */
+const clearEl = (el) => { while (el.firstChild) el.removeChild(el.firstChild); };
+const label = (text, marginTop = '10px') => {
+    const d = document.createElement('div');
+    d.textContent = text; d.style.fontWeight = 'bold'; d.style.marginTop = marginTop;
+    return d;
+};
+const hr = () => { const h = document.createElement('hr'); h.style.margin = '10px 0'; return h; };
+const row2 = (a, b) => {
+    const w = document.createElement('div');
+    w.style.display = 'grid'; w.style.gridTemplateColumns = '1fr 1fr'; w.style.gap = '8px';
+    w.appendChild(a); w.appendChild(b);
+    return w;
+};
+const btnFull = (text) => {
+    const b = document.createElement('button');
+    b.className = 'button'; b.textContent = text;
+    b.style.width = '100%'; b.style.marginTop = '6px';
+    return b;
+};
+const inputNum = () => {
+    const i = document.createElement('input');
+    i.type = 'number'; i.step = 'any'; i.style.width = '100%'; i.style.margin = '6px 0 8px';
+    return i;
+};
+const sel = () => {
+    const s = document.createElement('select');
+    s.style.width = '100%'; s.style.margin = '6px 0 8px';
+    return s;
+};
+
+/** ui.mjs alerted on an unusable pair; headless callers have no `alert`. */
+const warn = (message) => {
+    if (typeof alert === 'function') alert(message); else console.warn(`[constraints] ${message}`);
+};
+
 
 export class ConstraintController {
     /**
@@ -42,6 +85,10 @@ export class ConstraintController {
 
         /** @type {?HTMLElement} The list panel, once attached. */
         this.listContainer = null;
+        /** @type {?HTMLElement} The builder, once rendered into the panel. */
+        this.builderContainer = null;
+        /** @type {?Array<Object>} One entry per builder section's four selects. */
+        this.builderSections = null;
         this.engine.onListChanged(() => this.renderList());
         if (typeof document !== 'undefined') {
             this.attachList(document.getElementById('constraints-list'));
@@ -85,6 +132,10 @@ export class ConstraintController {
             for (const c of declared) {
                 if (this.addConstraint(c)) installed++;
             }
+            // addConstraint solves each one on its own as it lands, so two
+            // constraints sharing a shape would leave only the last satisfied.
+            // One final pass solves the whole declared set together.
+            if (installed > 1) this.engine.applyAllConstraints();
             return installed;
         });
     }
@@ -179,13 +230,15 @@ export class ConstraintController {
      *
      * ui.mjs styled the list element itself rather than through a stylesheet
      * (ui.mjs:151-157); those styles are reapplied here so the panel looks the
-     * same whether or not the host page carries a rule for it.
+     * same whether or not the host page carries a rule for it. The builder
+     * that stood above that list in ui.mjs is raised into the same panel.
      *
      * @param {?HTMLElement} container - Typically `#constraints-list`.
      */
     attachList(container) {
         this.listContainer = container || null;
         if (!this.listContainer) return;
+        this.renderBuilder(this.listContainer.parentElement);
         Object.assign(this.listContainer.style, {
             maxHeight: '160px',
             overflowY: 'auto',
@@ -194,6 +247,173 @@ export class ConstraintController {
             fontSize: '12px'
         });
         this.renderList();
+    }
+
+
+    /**
+     * Build the constraint builder that stood above the list in morphTo's
+     * popup (ui.mjs:47-198): three sections — Coincident, Distance,
+     * Horizontal/Vertical — each a pair of shape selects over a pair of anchor
+     * selects, the anchor pair refilled from the live catalogue whenever its
+     * shape changes, then the section's create button.
+     *
+     * Without it a constraint can only arrive from a typed `constraints { }`
+     * block; this is the interactive write path into `addConstraint`.
+     *
+     * @param {?HTMLElement} panel - `#constraints-panel`; the builder is
+     *   inserted as its first child, above the 'Active Constraints' label.
+     */
+    renderBuilder(panel) {
+        if (!panel || typeof document === 'undefined') return;
+        const existing = panel.querySelector?.('#constraints-builder');
+        if (existing) existing.remove();
+
+        const root = document.createElement('div');
+        root.id = 'constraints-builder';
+
+        /** @type {Array<{shapes: HTMLSelectElement[], anchors: HTMLSelectElement[]}>} */
+        this.builderSections = [];
+
+        /** One section: two shape selects, two anchor selects, wired together. */
+        const section = (title) => {
+            const shapeA = sel(), shapeB = sel();
+            const anchorA = sel(), anchorB = sel();
+            shapeA.addEventListener('change', () => this.fillAnchors(anchorA, shapeA.value));
+            shapeB.addEventListener('change', () => this.fillAnchors(anchorB, shapeB.value));
+            root.appendChild(label(title));
+            root.appendChild(row2(shapeA, shapeB));
+            root.appendChild(row2(anchorA, anchorB));
+            const part = { shapes: [shapeA, shapeB], anchors: [anchorA, anchorB] };
+            this.builderSections.push(part);
+            return part;
+        };
+
+        /** The pair a section's four selects currently name, or null. */
+        const pair = ({ shapes, anchors }) => {
+            if (!shapes[0].value || !shapes[1].value || !anchors[0].value || !anchors[1].value) return null;
+            return [
+                { shape: shapes[0].value, anchor: anchors[0].value },
+                { shape: shapes[1].value, anchor: anchors[1].value }
+            ];
+        };
+
+        const coincident = section('Coincident');
+        const coincidentBtn = btnFull('Make Anchors Coincident');
+        coincidentBtn.addEventListener('click', () => {
+            const ends = pair(coincident);
+            if (!ends) return;
+            const [a, b] = ends;
+            if (a.shape === b.shape && a.anchor === b.anchor) { warn('Pick different anchors.'); return; }
+            this.createConstraint({ type: 'coincident', a, b });
+        });
+        root.appendChild(coincidentBtn);
+        root.appendChild(hr());
+
+        const dist = section('Distance');
+        const distValue = inputNum();
+        distValue.placeholder = 'Distance (e.g., 100)';
+        root.appendChild(distValue);
+        const distBtn = btnFull('Apply Distance');
+        distBtn.addEventListener('click', () => {
+            const ends = pair(dist);
+            if (!ends) return;
+            const d = Number(distValue.value);
+            if (!Number.isFinite(d) || d < 0) { warn('Enter a non-negative distance.'); return; }
+            this.createConstraint({ type: 'distance', a: ends[0], b: ends[1], dist: d });
+        });
+        root.appendChild(distBtn);
+        root.appendChild(hr());
+
+        const axis = section('Horizontal / Vertical');
+        const horizontalBtn = btnFull('Make Horizontal');
+        const verticalBtn = btnFull('Make Vertical');
+        horizontalBtn.addEventListener('click', () => {
+            const ends = pair(axis);
+            if (ends) this.createConstraint({ type: 'horizontal', a: ends[0], b: ends[1] });
+        });
+        verticalBtn.addEventListener('click', () => {
+            const ends = pair(axis);
+            if (ends) this.createConstraint({ type: 'vertical', a: ends[0], b: ends[1] });
+        });
+        root.appendChild(row2(horizontalBtn, verticalBtn));
+        root.appendChild(hr());
+
+        panel.insertBefore(root, panel.firstChild);
+        this.builderContainer = root;
+        this.refreshBuilder();
+    }
+
+    /**
+     * Repopulate every shape select from the scene, then every anchor select
+     * from whichever shape its pair now names — ui.mjs's `refreshAll`
+     * (ui.mjs:200-206), run whenever the panel opens.
+     */
+    refreshBuilder() {
+        if (!this.builderSections) return;
+        try { this.refresh(); } catch (_) { /* no scene yet */ }
+        for (const { shapes, anchors } of this.builderSections) {
+            shapes.forEach(select => this.fillShapes(select));
+            shapes.forEach((select, i) => { if (select.value) this.fillAnchors(anchors[i], select.value); });
+        }
+    }
+
+    /**
+     * Fill a select with the scene's shapes — ui.mjs read `renderer.shapes`
+     * (ui.mjs:23-31); the adapter presents the shape store the same way.
+     * @param {HTMLSelectElement} select
+     */
+    fillShapes(select) {
+        // A browser selects the first option of a freshly filled select on its
+        // own; that selection is made explicit so the value is never stale.
+        const previous = select.value;
+        clearEl(select);
+        for (const name of this.adapter.shapes.keys()) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+        }
+        select.value = previous && this.adapter.shapes.has(previous)
+            ? previous
+            : (select.firstChild?.value ?? '');
+    }
+
+    /**
+     * Fill a select with one shape's anchors, from the engine's catalogue
+     * (ui.mjs:32-42). The catalogue is the engine's to compute — anchor
+     * placement per shape type lives in `getAnchorsForShape` alone.
+     *
+     * @param {HTMLSelectElement} select
+     * @param {string} shapeName
+     */
+    fillAnchors(select, shapeName) {
+        clearEl(select);
+        if (!shapeName) return;
+        try { this.engine.rebuild(); } catch (_) { /* nothing to catalogue */ }
+        for (const anchor of this.anchorsFor(shapeName)) {
+            const option = document.createElement('option');
+            option.value = anchor.key;
+            option.textContent = anchor.label;
+            select.appendChild(option);
+        }
+        select.value = select.firstChild?.value ?? '';
+    }
+
+    /**
+     * Install one constraint from the builder and solve it, as a single
+     * undoable command — the same treatment `syncFromRun` gives a declared
+     * block, so an interactive constraint is no less reversible.
+     *
+     * @param {{type: string, a: Object, b: Object, dist?: number}} constraint
+     * @returns {boolean} Whether the constraint was installed.
+     */
+    createConstraint(constraint) {
+        try {
+            return this.runUndoable('Solve constraints', () => this.addConstraint(constraint));
+        } catch (error) {
+            console.warn(`[constraints] Constraint error: ${error.message}`);
+            return false;
+        }
     }
 
     /**
@@ -245,6 +465,7 @@ export class ConstraintController {
         const open = panel.style.display !== 'block';
         if (open) {
             try { this.refresh(); } catch (_) { /* no shapes yet */ }
+            this.refreshBuilder();
             this.renderList();
         }
         panel.style.display = open ? 'block' : 'none';

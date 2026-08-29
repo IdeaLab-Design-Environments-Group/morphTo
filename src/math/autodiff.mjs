@@ -45,8 +45,10 @@ const power = (x0, x1) => {
   if (x1.type !== "valder") x1 = valder(x1, x0.der.map(() => 0));
   if (!Number.isInteger(x1.val)) return valder(NaN, x0.der.map(() => NaN));   // simple integer-only
   if (x1.val === 0) return valder(1, x0.der.map(() => 0));
-  let ans = x1.val > 0 ? x0 : div(1, x0);
-  for (let i = 1; i < Math.abs(x1.val); i++) ans = mul(ans, x0);
+  // A negative exponent multiplies the reciprocal, not the base.
+  const base = x1.val > 0 ? x0 : div(1, x0);
+  let ans = base;
+  for (let i = 1; i < Math.abs(x1.val); i++) ans = mul(ans, base);
   return ans;
 };
 

@@ -21,14 +21,31 @@ const get_val_ders = (eqs, variables) => eqs.reduce((acc, cur) => {
   return acc;
 }, [[],[]]);
 
+// A non-finite start makes every convergence test below false forever — NaN
+// compares false, and no step is ever accepted, so lambda just grows. Refusing
+// the solve lets solveSystem fall back and leave the geometry alone.
+const allFinite = obj => Object.values(obj).every(v => Number.isFinite(v));
+
+// Contradictory systems do converge, but slowly: the worst measured here is 148
+// iterations (coincident and distance-100 on the same pair). The cap is the
+// backstop for a residual that turns non-finite mid-solve, which would
+// otherwise spin forever.
+const MAX_ITERATIONS = 2000;
+
 function levenbergMarquardt(eqs, variables, { ogLambda=10, lambdaUp=10, lambdaDown=10, epsilon=1e-5, fast=false } = {}) {
-  let lambda=ogLambda, updateJacobian=true, converged=false;
+  let lambda=ogLambda, updateJacobian=true, converged=false, iterations=0;
   let residual, jacobian, transJacobian, hessianApprox, weighted, gradiant, costGradiant;
   let deltas, error, newVariables, new_val_ders, new_error, val_ders;
 
+  if (!allFinite(variables)) throw new Error('levenbergMarquardt: non-finite starting variables');
+
   val_ders = get_val_ders(eqs, variables);
+  if (!Number.isFinite(totalError(val_ders))) throw new Error('levenbergMarquardt: non-finite initial residual');
 
   while(!converged){
+    // Give up on the last accepted variables rather than spinning.
+    if (++iterations > MAX_ITERATIONS) return variables;
+
     if(updateJacobian){
       [residual, jacobian] = val_ders.map(x => new Matrix(x));
       transJacobian = jacobian.trans();
@@ -65,9 +82,14 @@ function levenbergMarquardt(eqs, variables, { ogLambda=10, lambdaUp=10, lambdaDo
 
 function splitAt (i, arr){ return [arr.slice(0,i), arr.slice(i)]; }
 
+// Substitute a pinned variable by whole identifier only. A plain replaceAll
+// also rewrites variables the pinned name is a prefix of ("xcenter_plate"
+// inside "xcenter_plate2"), which leaves a malformed equation.
+const wholeVar = v => new RegExp(`(?<![A-Za-z0-9_])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`, 'g');
+
 export function solveSystem(eqns, vars, { forwardSubs = {}, epsilon = 1e-5 } = {}){
   Object.entries(forwardSubs).forEach(([v,val]) => {
-    eqns = eqns.map(eq => eq.replaceAll(v, val));
+    eqns = eqns.map(eq => eq.replace(wholeVar(v), val));
   });
 
   if (eqns.length < 1) return [[], vars];

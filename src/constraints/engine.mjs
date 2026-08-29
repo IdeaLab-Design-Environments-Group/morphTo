@@ -76,6 +76,18 @@ export class ConstraintEngine {
         anchors.push({ key, label });
       };
 
+      // Anchors are offsets from `transform.position`, which is the centre of
+      // the shape's bounding box. Radial features (circle compass points,
+      // polygon vertices, arc ends) are defined about the shape's own declared
+      // centre instead, and for an arc the two are far apart. `addR` carries
+      // that difference so those anchors land on the geometry.
+      const dcx = getNum(shape, 'centerX', NaN);
+      const dcy = getNum(shape, 'centerY', NaN);
+      const [bcx, bcy] = Array.isArray(shape.transform?.position) ? shape.transform.position : [0,0];
+      const ox0 = Number.isFinite(dcx) ? dcx - bcx : 0;
+      const oy0 = Number.isFinite(dcy) ? dcy - bcy : 0;
+      const addR = (key, label, off) => add(key, label, { x: ox0 + off.x, y: oy0 + off.y });
+
       add('center', 'Center', {x:0, y:0});
 
       if (['rectangle','roundedrectangle','chamferrectangle','cross'].includes(type)) {
@@ -93,37 +105,43 @@ export class ConstraintEngine {
       }
 
       if (['circle','donut','gear','star'].includes(type)) {
-        const r = getNum(shape, ['outerRadius','radius','r'], 0);
-        add('circ_e','East (0°)',{x:+r,y:0});
-        add('circ_n','North (90°)',{x:0,y:+r});
-        add('circ_w','West (180°)',{x:-r,y:0});
-        add('circ_s','South (270°)',{x:0,y:-r});
+        // A gear is sized by its pitch diameter; the compass points sit on the
+        // pitch circle. Without this the gear's anchors all collapse onto its
+        // centre, because none of the radius keys exist on the model.
+        const pitch = getNum(shape, ['pitchDiameter','pitch_diameter'], 0) / 2;
+        const r = getNum(shape, ['outerRadius','radius','r'], 0) || pitch;
+        addR('circ_e','East (0°)',{x:+r,y:0});
+        addR('circ_n','North (90°)',{x:0,y:+r});
+        addR('circ_w','West (180°)',{x:-r,y:0});
+        addR('circ_s','South (270°)',{x:0,y:-r});
       }
       if (type === 'donut') {
         const ri = getNum(shape, ['innerRadius','rInner','holeRadius'], 0);
         if (ri > 0) {
-          add('donut_i_e','Inner East',{x:+ri,y:0});
-          add('donut_i_n','Inner North',{x:0,y:+ri});
-          add('donut_i_w','Inner West',{x:-ri,y:0});
-          add('donut_i_s','Inner South',{x:0,y:-ri});
+          addR('donut_i_e','Inner East',{x:+ri,y:0});
+          addR('donut_i_n','Inner North',{x:0,y:+ri});
+          addR('donut_i_w','Inner West',{x:-ri,y:0});
+          addR('donut_i_s','Inner South',{x:0,y:-ri});
         }
       }
 
       if (type === 'ellipse') {
         const rx = getNum(shape, ['radiusX','rx'], 0);
         const ry = getNum(shape, ['radiusY','ry'], 0);
-        add('ellipse_e','East',{x:+rx,y:0});
-        add('ellipse_n','North',{x:0,y:+ry});
-        add('ellipse_w','West',{x:-rx,y:0});
-        add('ellipse_s','South',{x:0,y:-ry});
+        addR('ellipse_e','East',{x:+rx,y:0});
+        addR('ellipse_n','North',{x:0,y:+ry});
+        addR('ellipse_w','West',{x:-rx,y:0});
+        addR('ellipse_s','South',{x:0,y:-ry});
       }
 
       if (type === 'polygon') {
         const r = getNum(shape, 'radius', 0);
         const n = Math.max(3, Math.round(getNum(shape, 'sides', 3)));
+        // Polygon.toGeometryPath starts at -PI/2 so an odd-sided polygon points
+        // straight up; matching that puts the anchors on the real vertices.
         for (let i=0;i<n;i++){
-          const t = (2*Math.PI*i)/n;
-          add(`poly_v${i}`, `Vertex ${i}`, {x: r*Math.cos(t), y: r*Math.sin(t)});
+          const t = -Math.PI/2 + (2*Math.PI*i)/n;
+          addR(`poly_v${i}`, `Vertex ${i}`, {x: r*Math.cos(t), y: r*Math.sin(t)});
         }
       }
 
@@ -142,9 +160,9 @@ export class ConstraintEngine {
         const a0 = rad(getNum(shape, 'startAngle', 0));
         const a1 = rad(getNum(shape, 'endAngle', 0));
         const am = (a0+a1)/2;
-        add('arc_start','Start',{x: r*Math.cos(a0), y: r*Math.sin(a0)});
-        add('arc_end','End',{x: r*Math.cos(a1), y: r*Math.sin(a1)});
-        add('arc_mid','Mid',{x: r*Math.cos(am), y: r*Math.sin(am)});
+        addR('arc_start','Start',{x: r*Math.cos(a0), y: r*Math.sin(a0)});
+        addR('arc_end','End',{x: r*Math.cos(a1), y: r*Math.sin(a1)});
+        addR('arc_mid','Mid',{x: r*Math.cos(am), y: r*Math.sin(am)});
       }
 
       if (type === 'arrow') {
@@ -408,17 +426,69 @@ export class ConstraintEngine {
     });
   }
 
+  /**
+   * Every constraint's residual equations, over one shared variable set.
+   *
+   * @param {?string} fixedShapeName
+   * @returns {{eqs: string[], ids: string[]}}
+   */
+  _collectSystem() {
+    const eqs = [];
+    const ids = [];
+    const seen = new Set();
+    const use = (id) => { if (!seen.has(id)) { seen.add(id); ids.push(id); } };
+
+    for (const c of this.constraints) {
+      const idA = sym(`${c.a?.anchor}_${c.a?.shape}`);
+      const idB = sym(`${c.b?.anchor}_${c.b?.shape}`);
+      if (!this.anchors.has(idA) || !this.anchors.has(idB)) continue;
+
+      let k;
+      if (c.type === 'coincident')      k = new Coincident({id:idA},{id:idB});
+      else if (c.type === 'distance')   k = new Distance({id:idA},{id:idB}, c.dist);
+      else if (c.type === 'horizontal') k = new Horizontal({id:idA},{id:idB});
+      else if (c.type === 'vertical')   k = new Vertical({id:idA},{id:idB});
+      else continue;
+
+      use(idA); use(idB);
+      eqs.push(...k.getEqs(`x${idA}`, `y${idA}`, `x${idB}`, `y${idB}`));
+    }
+    return { eqs, ids };
+  }
+
+  /**
+   * Solve every constraint at once.
+   *
+   * Solving them one at a time — as this did originally, and as it still does
+   * for a single freshly added constraint — lets each solve undo the one
+   * before it whenever two constraints share a shape: the last one installed
+   * is the only one left satisfied. Pooling the residuals into one system and
+   * handing that to solveSystem satisfies them together.
+   *
+   * @param {?string} fixedShapeName - A shape to pin (the one being dragged).
+   */
   applyAllConstraints(fixedShapeName = null) {
     if (this._applying || !this.liveEnforce || this.constraints.length === 0) return;
     this._applying = true;
     try {
-      for (const c of this.constraints) {
-        if (c.type === 'distance') {
-          this._solveConstraint('distance', c.a, c.b, { dist: c.dist }, fixedShapeName);
+      this.rebuild();
+      const { eqs, ids } = this._collectSystem();
+      if (eqs.length === 0) return;
+
+      const vars = this._varsFor(ids);
+      const forwardSubs = {};
+      const idsToMove = [];
+      for (const id of ids) {
+        if (fixedShapeName && this.anchors.get(id)?.shapeName === fixedShapeName) {
+          forwardSubs[`x${id}`] = `(${cstr(vars[`x${id}`])})`;
+          forwardSubs[`y${id}`] = `(${cstr(vars[`y${id}`])})`;
         } else {
-          this._solveConstraint(c.type, c.a, c.b, {}, fixedShapeName);
+          idsToMove.push(id);
         }
       }
+
+      const [, solved] = solveSystem(eqs, vars, { forwardSubs });
+      this._applySolved(idsToMove, solved, fixedShapeName);
     } finally {
       this._applying = false;
     }
