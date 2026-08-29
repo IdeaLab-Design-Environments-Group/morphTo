@@ -85,7 +85,11 @@ export class Line extends Shape {
     }
 
     /**
-     * Render the line segment with an explicit black width-1 stroke.
+     * Render the line segment, inheriting the stroke state ShapesPass set.
+     *
+     * The pass applies morphTo's shape styling (colour, width, select and
+     * hover states), so overriding strokeStyle/lineWidth here would paint
+     * every line black at the wrong weight and defeat selection feedback.
      *
      * @param {CanvasRenderingContext2D} ctx
      */
@@ -93,8 +97,6 @@ export class Line extends Shape {
         const path = this.toGeometryPath();
         ctx.beginPath();
         path.toCanvasPath(ctx);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
         ctx.stroke();
     }
 

@@ -9,6 +9,15 @@
  * @module views/canvas/passes/DragPreviewPass
  */
 import { Path as GeoPath, Vec as GeoVec } from '../../../geometry/index.js';
+import { SHAPE_STYLE } from './ShapesPass.js';
+
+/**
+ * Ghost outline colour — morphTo has no drag preview, so this is borrowed
+ * from its control-point blue (REF renderer/shapeRenderer.mjs:162) rather
+ * than invented. The dash pattern is REF's default (renderer/pathRenderer.mjs:234).
+ */
+const PREVIEW_STROKE = '#2196F3';
+const PREVIEW_DASH = [5, 5];
 
 export class DragPreviewPass {
     /**
@@ -37,9 +46,11 @@ export class DragPreviewPass {
      */
     renderDragPreview(frame, shapeType, x, y) {
         const { ctx } = frame;
-        ctx.strokeStyle = '#007acc';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = PREVIEW_STROKE;
+        ctx.lineWidth = SHAPE_STYLE.width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.setLineDash(PREVIEW_DASH);
         ctx.globalAlpha = 0.5;
 
         // Draw preview based on shape type
@@ -49,8 +60,6 @@ export class DragPreviewPass {
             path.toCanvasPath(ctx);
             ctx.stroke();
         } else if (shapeType === 'line') {
-            ctx.strokeStyle = '#2aa3ff';
-            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(x - 40, y);
             ctx.lineTo(x + 40, y);

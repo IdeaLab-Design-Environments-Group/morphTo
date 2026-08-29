@@ -2,7 +2,7 @@
  * @fileoverview JoineryPass — renders finger-joint / dovetail joinery by
  * MODIFYING the affected edge: it erases the straight edge painted by ShapesPass
  * and redraws it as the toothed cut profile (tabs on the boundary, notches cut
- * inward), in the shape's own black stroke — not as a coloured overlay. It also
+ * inward), in the shape's own outline stroke — not as a coloured overlay. It also
  * draws the interactive depth handle while the owning shape is selected.
  *
  * Ported from CanvasRenderer.renderEdgeJoinery(), renderFingerJoinery(), and
@@ -17,6 +17,10 @@
  * @module views/canvas/passes/JoineryPass
  */
 import { jointRenderPlan } from '../../../models/joinery.js';
+import { SHAPE_STYLE } from './ShapesPass.js';
+
+/** Idle joinery-handle colour — REF renderer/shapeRenderer.mjs:162 ('#2196F3'). */
+const JOINERY_HANDLE_COLOR = '#2196F3';
 
 export class JoineryPass {
     /**
@@ -147,14 +151,17 @@ export class JoineryPass {
         // toothed profile (tabs on the boundary, notches cut inward). This is
         // the actual cut line, in the shape's own black stroke.
         const outline = this.buildToothOutline({ p1, ux, uy, nx, ny, plan });
-        const strokeWidth = 0.8;   // matches ShapesPass shape outline (world units)
+        // Same world-unit outline weight ShapesPass paints shapes with, so the
+        // jointed edge is indistinguishable from the rest of the outline
+        // (REF styleManager.mjs:109).
+        const strokeWidth = SHAPE_STYLE.width;
 
         ctx.save();
         // 1) Erase the original straight edge along its whole length so the
         //    notch mouths are not crossed by a leftover line.
         ctx.globalCompositeOperation = 'destination-out';
         ctx.lineWidth = strokeWidth * 2.2;
-        ctx.strokeStyle = '#000';
+        ctx.strokeStyle = SHAPE_STYLE.stroke;
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -164,7 +171,7 @@ export class JoineryPass {
         ctx.globalCompositeOperation = 'source-over';
         ctx.lineWidth = strokeWidth;
         ctx.lineJoin = 'miter';
-        ctx.strokeStyle = '#000000';
+        ctx.strokeStyle = SHAPE_STYLE.stroke;
         ctx.beginPath();
         outline.forEach((pt, i) => {
             if (i === 0) ctx.moveTo(pt.x, pt.y);
@@ -266,8 +273,13 @@ export class JoineryPass {
 
         // Align handle removed per UX request (avoid "L" bubble)
 
-        // Draw depth handle - bracket style (like bounding box)
-        const handleColor = (isHoveredDepth || isDraggingThis) ? '#f97316' : '#3b82f6';
+        // Draw depth handle - bracket style (like bounding box).
+        // Palette is morphTo's: the selection accent when active/hovered
+        // (REF styleManager.mjs:97), the control-point blue when idle
+        // (REF renderer/shapeRenderer.mjs:162).
+        const handleColor = (isHoveredDepth || isDraggingThis)
+            ? SHAPE_STYLE.strokeSelected
+            : JOINERY_HANDLE_COLOR;
         ctx.save();
         ctx.strokeStyle = handleColor;
         ctx.lineWidth = lineWidth;

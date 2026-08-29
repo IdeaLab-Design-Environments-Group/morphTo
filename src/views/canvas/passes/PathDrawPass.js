@@ -11,6 +11,27 @@
  * @module views/canvas/passes/PathDrawPass
  */
 import { PathShape } from '../../../models/shapes/PathShape.js';
+import { SHAPE_STYLE } from './ShapesPass.js';
+
+/**
+ * morphTo palette for the path-draw affordances. Otto has this tool and
+ * morphTo does not, so every colour below is borrowed from a REF constant
+ * rather than invented.
+ */
+const PATH_DRAW = {
+    /** Anchor squares — REF renderer/shapeRenderer.mjs:227 (control-point outline). */
+    anchor: '#000000',
+    /** "click to close" marker — REF renderer/styleManager.mjs:117 (union green). */
+    closeFill: '#4CAF50',
+    /** Its outline — REF renderer/styleManager.mjs:122 (named colour `green`). */
+    closeStroke: '#008000',
+    /** "next segment is curved" ring — REF renderer/styleManager.mjs:98 (hover accent). */
+    curveHint: '#FF6B35',
+    /** Bezier handles — REF renderer/shapeRenderer.mjs:162 / pathRenderer.mjs:105. */
+    handle: '#2196F3',
+    /** Handle knob fill — REF renderer/styleManager.mjs:125 (named colour `white`). */
+    handleFill: '#FFFFFF'
+};
 
 export class PathDrawPass {
     /**
@@ -49,8 +70,8 @@ export class PathDrawPass {
             frame.interaction.pathDrawHandles
         );
         ctx.save();
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = SHAPE_STYLE.stroke;
+        ctx.lineWidth = SHAPE_STYLE.width;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.setLineDash([]);
@@ -59,17 +80,17 @@ export class PathDrawPass {
         ctx.stroke();
 
         // Draw anchor points
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = PATH_DRAW.anchor;
         points.forEach((p, i) => {
             // Highlight first point when there are 3+ points (can close path)
             if (i === 0 && frame.interaction.pathDrawPoints.length >= 3) {
                 // Draw a larger square with green color to indicate it can be clicked to close
-                ctx.fillStyle = '#4CAF50'; // Green for "close path" indicator
+                ctx.fillStyle = PATH_DRAW.closeFill; // Green for "close path" indicator
                 ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
-                ctx.strokeStyle = '#2E7D32';
+                ctx.strokeStyle = PATH_DRAW.closeStroke;
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
-                ctx.fillStyle = '#000'; // Reset for other points
+                ctx.fillStyle = PATH_DRAW.anchor; // Reset for other points
             } else {
                 ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
             }
@@ -78,8 +99,8 @@ export class PathDrawPass {
         // Visual indicator when next segment will be curved
         if (frame.interaction.nextSegmentCurved && points.length > 1) {
             const lastPoint = points[points.length - 2] || points[0];
-            ctx.strokeStyle = '#ff6600';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = PATH_DRAW.curveHint;
+            ctx.lineWidth = SHAPE_STYLE.width;
             ctx.beginPath();
             ctx.arc(lastPoint.x, lastPoint.y, 6, 0, Math.PI * 2);
             ctx.stroke();
@@ -104,25 +125,25 @@ export class PathDrawPass {
             frame.interaction.pathDrawHandles
         );
         ctx.save();
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = SHAPE_STYLE.stroke;
+        ctx.lineWidth = SHAPE_STYLE.width;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.setLineDash([]);
         ctx.beginPath();
         path.toCanvasPath(ctx);
         ctx.stroke();
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = PATH_DRAW.anchor;
         points.forEach((p, i) => {
             // Highlight first point when there are 3+ points (can close path)
             if (i === 0 && frame.interaction.pathDrawPoints.length >= 3) {
                 // Draw a larger square with green color to indicate it can be clicked to close
-                ctx.fillStyle = '#4CAF50'; // Green for "close path" indicator
+                ctx.fillStyle = PATH_DRAW.closeFill; // Green for "close path" indicator
                 ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
-                ctx.strokeStyle = '#2E7D32';
+                ctx.strokeStyle = PATH_DRAW.closeStroke;
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
-                ctx.fillStyle = '#000'; // Reset for other points
+                ctx.fillStyle = PATH_DRAW.anchor; // Reset for other points
             } else {
                 ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
             }
@@ -155,8 +176,8 @@ export class PathDrawPass {
         const handleRadius = 5 / frame.viewport.zoom;
         ctx.save();
         ctx.lineWidth = 1.5 / frame.viewport.zoom;
-        ctx.strokeStyle = '#2196F3';
-        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = PATH_DRAW.handle;
+        ctx.fillStyle = PATH_DRAW.handleFill;
 
         const showBothAtLast = (frame.interaction.pathDrawCurvedEndIndex !== null || frame.interaction.nextSegmentCurved) && points.length >= 2;
         const lastFixedIndex = frame.interaction.pathDrawCurvedEndIndex !== null

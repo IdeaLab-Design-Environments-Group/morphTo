@@ -91,15 +91,21 @@ export class PathShape extends Shape {
         return styleContainsPoint(path, new GeoVec(x, y));
     }
 
+    /**
+     * Render the path, inheriting the stroke state ShapesPass set. Only the
+     * per-shape strokeWidth is applied on top, so select and hover colours
+     * from the pass still reach the outline.
+     */
     render(ctx) {
         const path = this.toGeometryPath();
         ctx.save();
         ctx.beginPath();
         path.toCanvasPath(ctx);
-        ctx.lineWidth = this.strokeWidth;
+        if (Number.isFinite(this.strokeWidth)) {
+            ctx.lineWidth = this.strokeWidth;
+        }
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#000';
         ctx.stroke();
         ctx.restore();
     }
