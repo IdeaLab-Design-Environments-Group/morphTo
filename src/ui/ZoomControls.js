@@ -1,8 +1,12 @@
 /**
- * @fileoverview Zoom-controls toolbar component.
+ * @fileoverview Zoom-controls component.
  *
- * Renders a compact row of buttons and a live percentage display that lets the
- * user zoom in, zoom out, fit all shapes into view, or reset to 100%.
+ * Renders morphTo's on-canvas zoom stack: a `+` button, the live percentage
+ * readout, and a `-` button, stacked top-to-bottom in the bottom-right corner
+ * of the visualization panel. The markup mirrors morphTo's renderer
+ * (`createZoomControls()` / `updateZoomDisplay()`) exactly, so morphTo's
+ * existing `.canvas-zoom-controls` / `.zoom-button` / `.zoom-level` CSS styles
+ * it with no additional rules.
  *
  * The component owns no zoom logic itself — every zoom mutation is delegated
  * to the {@link ViewportController}, which owns pan/zoom and the screen↔world
@@ -19,17 +23,29 @@ import { Component } from './Component.js';
 import EventBus, { EVENTS } from '../events/EventBus.js';
 
 /**
- * Zoom toolbar component.
+ * Multiplicative step per button press, matching morphTo's
+ * `coordinateSystem.zoomStep`: in multiplies by 1.15, out divides by it.
+ * @type {number}
+ */
+const ZOOM_STEP = 0.15;
+
+/** Fallback zoom limits, matching ViewportController's MIN_ZOOM / MAX_ZOOM. */
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 6;
+
+/**
+ * Zoom control stack.
  *
- * Provides zoom-in (+), zoom-out (-), fit-to-content (Fit), reset-to-100%
- * (100%), and a live percentage label. Extends {@link Component}.
+ * Provides zoom-in (+), zoom-out (-) and a live percentage label, plus
+ * fit-to-content and reset-to-100% operations that morphTo drives from
+ * keyboard/menu rather than from a button. Extends {@link Component}.
  *
  * @class ZoomControls
  * @extends Component
  */
 export class ZoomControls extends Component {
     /**
-     * @param {HTMLElement} container - The DOM element this toolbar renders into.
+     * @param {HTMLElement} container - The DOM element this component renders into.
      * @param {Object} deps
      * @param {import('../core/SceneContext.js').SceneContext} deps.context -
      *   Resolves the ACTIVE tab's shape store for fitToContent(); never stale
@@ -48,67 +64,57 @@ export class ZoomControls extends Component {
         return this.vc.viewport;
     }
 
+    /** @returns {number} Lowest zoom the viewport controller allows. */
+    get minZoom() {
+        return this.vc.minZoom ?? MIN_ZOOM;
+    }
+
+    /** @returns {number} Highest zoom the viewport controller allows. */
+    get maxZoom() {
+        return this.vc.maxZoom ?? MAX_ZOOM;
+    }
+
     /**
-     * Render the zoom-controls toolbar:
-     *   [ - ]  [ 85% ]  [ + ]  [ Fit ]  [ 100% ]
+     * Render the zoom stack, top to bottom:
+     *   [ + ]
+     *   [ 85% ]
+     *   [ - ]
      *
-     * The percentage span is populated immediately and then kept up to date
-     * via a VIEWPORT_CHANGED subscription (guarded by `_zoomSubscribed` so
-     * repeated render() calls do not stack listeners).
+     * The readout is populated immediately and then kept up to date via a
+     * VIEWPORT_CHANGED subscription (guarded by `_zoomSubscribed` so repeated
+     * render() calls do not stack listeners).
      */
     render() {
         this.container.innerHTML = '';
 
         const controls = this.createElement('div', {
-            class: 'zoom-controls'
+            class: 'canvas-zoom-controls'
         });
 
-        // Zoom out button
-        const btnZoomOut = this.createElement('button', {
-            class: 'zoom-btn',
-            title: 'Zoom Out'
-        }, '-');
-        btnZoomOut.addEventListener('click', () => {
-            this.zoom(-0.1);
-        });
-
-        // Zoom percentage display
-        const zoomDisplay = this.createElement('span', {
-            class: 'zoom-display'
-        }, this.getZoomPercentage());
-
-        // Zoom in button
-        const btnZoomIn = this.createElement('button', {
-            class: 'zoom-btn',
-            title: 'Zoom In'
+        const zoomInBtn = this.createElement('button', {
+            type: 'button',
+            class: 'zoom-button'
         }, '+');
-        btnZoomIn.addEventListener('click', () => {
-            this.zoom(0.1);
+        zoomInBtn.addEventListener('click', () => {
+            this.zoomBy(1 + ZOOM_STEP);
         });
 
-        // Fit to content button
-        const btnFit = this.createElement('button', {
-            class: 'zoom-btn zoom-btn-fit',
-            title: 'Fit to Content'
-        }, 'Fit');
-        btnFit.addEventListener('click', () => {
-            this.fitToContent();
+        const zoomLevelEl = this.createElement('div', {
+            class: 'zoom-level',
+            id: 'canvas-zoom-level'
         });
 
-        // Reset zoom button
-        const btnReset = this.createElement('button', {
-            class: 'zoom-btn zoom-btn-reset',
-            title: 'Reset Zoom (100%)'
-        }, '100%');
-        btnReset.addEventListener('click', () => {
-            this.resetZoom();
+        const zoomOutBtn = this.createElement('button', {
+            type: 'button',
+            class: 'zoom-button'
+        }, '-');
+        zoomOutBtn.addEventListener('click', () => {
+            this.zoomBy(1 / (1 + ZOOM_STEP));
         });
 
-        controls.appendChild(btnZoomOut);
-        controls.appendChild(zoomDisplay);
-        controls.appendChild(btnZoomIn);
-        controls.appendChild(btnFit);
-        controls.appendChild(btnReset);
+        controls.appendChild(zoomInBtn);
+        controls.appendChild(zoomLevelEl);
+        controls.appendChild(zoomOutBtn);
 
         this.container.appendChild(controls);
 
@@ -123,8 +129,11 @@ export class ZoomControls extends Component {
             this._zoomSubscribed = true;
         }
 
-        // Store reference to zoom display for updates
-        this.zoomDisplayElement = zoomDisplay;
+        this.zoomDisplayElement = zoomLevelEl;
+        this.zoomInBtn = zoomInBtn;
+        this.zoomOutBtn = zoomOutBtn;
+
+        this.updateZoomDisplay();
     }
 
     /**
@@ -140,31 +149,40 @@ export class ZoomControls extends Component {
     }
 
     /**
-     * Refresh the live zoom-percentage label without re-rendering the toolbar.
-     * Falls back to a full render() if the span reference has been lost.
+     * Refresh the live readout and the buttons' disabled state without
+     * re-rendering. Falls back to a full render() if the element reference has
+     * been lost.
      */
     updateZoomDisplay() {
-        if (this.zoomDisplayElement) {
-            this.zoomDisplayElement.textContent = this.getZoomPercentage();
-        } else {
+        if (!this.zoomDisplayElement) {
             this.render();
+            return;
+        }
+
+        this.zoomDisplayElement.textContent = this.getZoomPercentage();
+
+        if (this.zoomInBtn) {
+            this.zoomInBtn.disabled = this.viewport.zoom >= this.maxZoom - 0.0001;
+        }
+
+        if (this.zoomOutBtn) {
+            this.zoomOutBtn.disabled = this.viewport.zoom <= this.minZoom + 0.0001;
         }
     }
 
     /**
-     * Adjust the zoom level by an additive delta around the canvas center.
+     * Multiply the zoom level around the canvas center.
      *
-     * The ViewportController expects a multiplicative factor, so the additive
-     * button delta is converted to a ratio against the current zoom, clamped
-     * to the same [0.1, 5] range the controller enforces.
+     * The center is taken from the ViewportController's CSS dimensions (the
+     * original read the DPR-inflated `canvas.width`, which anchored off-center
+     * on HiDPI displays). Clamping is the controller's job.
      *
-     * @param {number} factor - Additive change to viewport.zoom (+0.1 / -0.1).
+     * @param {number} factor - e.g. 1.15 to zoom in, 1/1.15 to zoom out.
      */
-    zoom(factor) {
-        const newZoom = Math.max(0.1, Math.min(5, this.viewport.zoom + factor));
+    zoomBy(factor) {
         const centerX = this.vc.cssWidth / 2 || window.innerWidth / 2;
         const centerY = this.vc.cssHeight / 2 || window.innerHeight / 2;
-        this.vc.zoom(newZoom / this.viewport.zoom, centerX, centerY);
+        this.vc.zoom(factor, centerX, centerY);
         this.updateZoomDisplay();
     }
 
@@ -172,10 +190,7 @@ export class ZoomControls extends Component {
      * Zoom and pan so that every shape on the canvas is visible with padding.
      *
      * Computes the union bounding box of all resolved shapes, picks the larger
-     * axis-fitting zoom (capped at 5×), and centers the viewport on the box.
-     * Uses the canvas CSS dimensions from the ViewportController (the old
-     * implementation read the DPR-inflated canvas.width, which over-zoomed on
-     * HiDPI displays).
+     * axis-fitting zoom (capped at maxZoom), and centers the viewport on the box.
      */
     fitToContent() {
         const shapes = this.context.shapeStore.getResolved();
@@ -203,7 +218,7 @@ export class ZoomControls extends Component {
 
         const zoomX = (canvasWidth - padding * 2) / width;
         const zoomY = (canvasHeight - padding * 2) / height;
-        const targetZoom = Math.min(zoomX, zoomY, 5);
+        const targetZoom = Math.min(zoomX, zoomY, this.maxZoom);
 
         // Center viewport on shapes
         const centerX = (minX + maxX) / 2;
@@ -222,10 +237,6 @@ export class ZoomControls extends Component {
      */
     resetZoom() {
         const baseZoom = this.vc.baseZoom || 1;
-        const factor = baseZoom / this.viewport.zoom;
-        const centerX = this.vc.cssWidth / 2 || window.innerWidth / 2;
-        const centerY = this.vc.cssHeight / 2 || window.innerHeight / 2;
-        this.vc.zoom(factor, centerX, centerY);
-        this.updateZoomDisplay();
+        this.zoomBy(baseZoom / this.viewport.zoom);
     }
 }

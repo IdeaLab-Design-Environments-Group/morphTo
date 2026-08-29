@@ -582,7 +582,10 @@ export class Application {
      */
     newTab() {
         const tabNumber = this.tabManager.tabs.length + 1;
-        this.tabManager.createTab(`Untitled ${tabNumber}`);
+        const tab = this.tabManager.createTab(`Untitled ${tabNumber}`);
+        // morphTo's newDoc() ends in switchDoc(), so "+" lands you on the new
+        // tab. TabManager deliberately does not auto-switch, so do it here.
+        if (tab) this.tabManager.switchTab(tab.id);
     }
 
     /**
