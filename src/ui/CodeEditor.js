@@ -509,11 +509,10 @@ SHAPES
          gear, spiral, wave, slot, arrow,
          chamferrectangle
 
-2.5D (every shape)
+MATERIAL (every shape)
   depth: <mm>       material thickness (default 3)
-  z: <mm>           elevation off the work plane (default 0)
-  e.g.  shape circle c1 { radius: 30 depth: 6 z: 10 }
-  depth and z accept parameters
+  e.g.  shape circle c1 { radius: 30 depth: 6 }
+  depth accepts parameters
 
 TRANSFORMS
   transform shapeName {

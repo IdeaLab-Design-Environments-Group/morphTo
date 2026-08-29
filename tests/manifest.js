@@ -8,9 +8,8 @@ export const TEST_MODULES = [
     './unit/shape-schema.test.js',
     './unit/canvas-stack.test.js',
     './unit/commands.test.js',
-    './unit/depth-z.test.js',
+    './unit/depth.test.js',
     './unit/plugin-lifecycle.test.js',
-    './unit/stl-import.test.js',
     './unit/coach.test.js',
     './unit/joinery.test.js'
 ];

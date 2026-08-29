@@ -248,22 +248,16 @@ export class ShapeStore {
     }
 
     /**
-     * Resolved shapes sorted by 2.5D elevation (z), lowest first, with
-     * insertion order breaking ties. This is the paint order: higher-z
-     * pieces draw on top. Hit-testing walks the reverse (topmost first).
+     * Resolved shapes in paint order: insertion order, so later-added pieces
+     * draw on top. Hit-testing walks the reverse (topmost first).
      *
-     * A plain stable sort over the already-resolved array — resolution is
-     * done once here, not per comparison.
+     * Kept as a distinct method from {@link ShapeStore#getResolved} because it
+     * names the paint-order contract its callers depend on.
      *
      * @returns {Array<Shape>} Resolved shapes in bottom-to-top paint order.
      */
     getResolvedSorted() {
-        const resolved = this.getResolved();
-        // Decorate with original index so the sort is stable across engines.
-        return resolved
-            .map((shape, index) => ({ shape, index, z: Number(shape.z) || 0 }))
-            .sort((a, b) => (a.z - b.z) || (a.index - b.index))
-            .map(entry => entry.shape);
+        return this.getResolved();
     }
 
     /**

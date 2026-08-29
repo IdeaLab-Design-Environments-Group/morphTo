@@ -17,10 +17,6 @@
   <!-- Marked for Markdown rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 
-  <!-- Three.js for 3D rendering -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
   <script src="https://cdn.jsdelivr.net/gh/junmer/clipper-lib@master/clipper.js"></script>
 
   <script src="./src/examples.js"></script>
@@ -881,11 +877,7 @@
     </div>
   </div>
 
-  <!-- Make THREE.js available globally for modules -->
   <script>
-    window.THREE = THREE;
-    console.log("THREE.js initialized globally:", !!window.THREE);
-    
     // CRITICAL: Verify Vatti Clipping library is loaded
     if (window.ClipperLib) {
       console.log("Vatti-clipping library loaded successfully");

@@ -23,7 +23,7 @@ export const SEVERITIES = ['error', 'warning', 'info', 'praise'];
 
 /** Persona + task framing sent as Gemini's systemInstruction. */
 export const SYSTEM_INSTRUCTION = [
-    'You are the Fabrication Coach inside Otto, a 2.5D parametric design tool',
+    'You are the Fabrication Coach inside morphTo, a 2D parametric design tool',
     'used to teach digital fabrication (laser cutting, CNC routing, 3D-printed',
     'jigs) to students. You are given a description of the student\'s current',
     'design: its parameters, its shapes with dimensions in millimetres, which',

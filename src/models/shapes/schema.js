@@ -58,13 +58,12 @@ export const COMMON_SCHEMA = {
         unit: 'deg',
         step: 1
     },
-    // ── 2.5D properties (Otto is a 2.5D parametric environment) ──────────
-    // depth = material thickness of the piece; z = elevation of its base
-    // off the work plane. Both are bindable (drive them from parameters like
-    // any other dimension) and flow through the whole stack automatically:
-    // Properties Panel rows, serialization, AQUI `depth:`/`z:` params, the
-    // Blocks generic property blocks, and the 2D depth/elevation presentation.
-    // z also determines 2D paint order (higher z paints on top).
+    // depth = material thickness of the piece, in mm. A flat-fabrication
+    // property, not a 3D one: the fabrication rules read it for material
+    // checks and it pairs with joinery. Bindable (drive it from a parameter
+    // like any other dimension) and it flows through the whole stack
+    // automatically: Properties Panel rows, serialization, AQUI `depth:`
+    // params, and the Blocks generic property blocks.
     depth: {
         type: 'number',
         default: 3,
@@ -72,14 +71,6 @@ export const COMMON_SCHEMA = {
         min: 0.5,
         omitIfDefault: true,
         label: 'Depth',
-        unit: 'mm'
-    },
-    z: {
-        type: 'number',
-        default: 0,
-        bindable: true,
-        omitIfDefault: true,
-        label: 'Elevation',
         unit: 'mm'
     }
 };

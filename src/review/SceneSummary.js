@@ -124,8 +124,8 @@ export function buildSceneSummary({ shapes = [], parameters = [], code = '' } = 
  * @returns {string}
  */
 export function sceneSummaryToText(summary) {
-    const lines = [`Units: ${summary.unit}. Otto is a 2.5D parametric design tool`
-        + ` (flat pieces with a material "depth" thickness and "z" elevation).`];
+    const lines = [`Units: ${summary.unit}. morphTo is a 2D parametric design tool`
+        + ` (flat pieces cut from stock of a given material "depth" thickness).`];
 
     lines.push('', `Parameters (${summary.counts.parameters}):`);
     if (summary.parameters.length === 0) {

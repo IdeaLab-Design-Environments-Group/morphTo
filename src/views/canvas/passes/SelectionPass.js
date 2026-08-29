@@ -286,11 +286,11 @@ export class SelectionPass {
     }
 
     /**
-     * Render width/height dimension labels for selection, plus a 2.5D
-     * depth/elevation badge above the shape.
+     * Render width/height dimension labels for selection, plus a material
+     * depth badge above the shape.
      * @param {Object} frame
      * @param {{x,y,width,height}} bounds
-     * @param {?Object} shape - Resolved shape (for its depth/z); optional.
+     * @param {?Object} shape - Resolved shape (for its depth); optional.
      */
     renderSelectionDimensions(frame, bounds, shape = null) {
         const { ctx } = frame;
@@ -371,11 +371,10 @@ export class SelectionPass {
         ctx.fillText(heightText, 0, 0);
         ctx.restore();
 
-        // 2.5D badge: depth + elevation, above the shape.
+        // Material-thickness badge above the shape.
         if (shape) {
             const depth = Number(shape.depth ?? 3);
-            const z = Number(shape.z ?? 0);
-            const badge = `d ${depth.toFixed(1)}mm · z ${z.toFixed(1)}mm`;
+            const badge = `d ${depth.toFixed(1)}mm`;
             const badgeX = x + w / 2;
             const badgeY = y - 12 / frame.viewport.zoom;
             const bw = ctx.measureText(badge).width + textPadding * 2;

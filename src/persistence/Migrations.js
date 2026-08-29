@@ -21,13 +21,12 @@
  */
 export const MIGRATIONS = {
     /**
-     * 1.0.0 → 2.0.0: the 2.5D release. `depth` (default 3mm) and `z`
-     * (default 0) became common shape properties, serialized omit-if-default.
-     * A 1.0.0 scene never set them, and the shape schema supplies the
-     * defaults on load, so no per-shape rewrite is needed — this step is a
-     * pure version stamp. (Note: pre-2.0.0 `thickness` fields are per-shape
-     * GEOMETRY, e.g. Cross arm width, not material depth, so they are left
-     * untouched.)
+     * 1.0.0 → 2.0.0: `depth` (default 3mm) became a common shape property,
+     * serialized omit-if-default. A 1.0.0 scene never set it, and the shape
+     * schema supplies the default on load, so no per-shape rewrite is needed
+     * — this step is a pure version stamp. (Note: pre-2.0.0 `thickness`
+     * fields are per-shape GEOMETRY, e.g. Cross arm width, not material
+     * depth, so they are left untouched.)
      */
     '1.0.0': (data) => {
         data.version = '2.0.0';
