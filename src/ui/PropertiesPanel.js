@@ -1,6 +1,15 @@
 /**
  * Properties Panel using Observer Pattern and Strategy Pattern
- * Displays and edits properties of selected shape
+ * Displays and edits properties of selected shape.
+ *
+ * Markup note: this panel renders into #properties-panel-container, the top
+ * half of morphTo's inspector popup (.parameters-container). It therefore
+ * borrows morphTo's own parameter/property vocabulary rather than inventing
+ * chrome of its own: .parameters-content / .parameters-list / .parameter-item /
+ * .parameter-label / .parameter-slider-container / .parameter-value /
+ * .shape-selector / .no-shapes-message (styles.css "Parameter Manager Styles")
+ * and .property-field (styles.css "Property editor modal"). The popup supplies
+ * its own 12px padding, so nothing here adds outer padding.
  */
 import { Component } from './Component.js';
 import EventBus, { EVENTS } from '../events/EventBus.js';
@@ -28,6 +37,12 @@ export class PropertiesPanel extends Component {
         // Tracks which "shapeId:property" cells have their parameter/formula
         // binding controls revealed (literal fields stay compact by default).
         this.expandedBindings = new Set();
+        /**
+         * @type {HTMLElement|null} The .parameters-content wrapper built by
+         * render(); every section appends into it rather than into the raw
+         * container, so the panel keeps morphTo's popup structure.
+         */
+        this.body = null;
 
         // Subscribe to shape selection events (only once in constructor)
         this.subscribe(EVENTS.SHAPE_SELECTED, (payload) => {
@@ -94,7 +109,8 @@ export class PropertiesPanel extends Component {
     }
 
     /**
-     * Render the properties panel - now shows all shapes in compact layers format
+     * Render the properties panel: a mode field, the shape list, and the
+     * editors for whatever is selected — all inside one .parameters-content.
      */
     render() {
         if (!this.container) {
@@ -103,9 +119,11 @@ export class PropertiesPanel extends Component {
         }
 
         this.container.innerHTML = '';
+        this.body = this.createElement('div', { class: 'parameters-content' });
+        this.container.appendChild(this.body);
 
-        // Render selection mode toggle
-        this.renderSelectionModeToggle();
+        // Render selection mode chooser
+        this.renderSelectionModeField();
 
         // Get all shapes
         const allShapes = this.shapeStore.getAll();
@@ -121,9 +139,10 @@ export class PropertiesPanel extends Component {
             return;
         }
 
-        // Render all shapes in compact layers format
+        // The shape list is morphTo's own .shape-selector dropdown, widened to
+        // a list box so the engine's multi-selection still works.
         this.syncDisplayedSelection(allShapes);
-        this.renderLayersList(allShapes);
+        this.renderShapeSelector(allShapes);
 
         // Below the list, show editors for the current selection: every
         // bindable property (x/y/size/depth/z/tilt/cutDepth…) plus the
@@ -131,17 +150,22 @@ export class PropertiesPanel extends Component {
         // there is nowhere to change these values.
         const selectedIds = Array.from(this.selectedShapeIds);
         if (selectedIds.length > 1) {
-            const divider = this.createElement('div', { class: 'properties-separator' });
-            this.container.appendChild(divider);
             this.renderMultiSelection();
         } else {
             const shape = this.shapeStore.getSelected() || this.selectedShape;
             if (shape && this.shapeStore.get(shape.id)) {
-                const divider = this.createElement('div', { class: 'properties-separator' });
-                this.container.appendChild(divider);
                 this.renderProperties(this.shapeStore.get(shape.id));
             }
         }
+    }
+
+    /**
+     * The element sections append into. Falls back to the raw container when
+     * a section is rendered before render() built the wrapper.
+     * @returns {HTMLElement|null}
+     */
+    mountTarget() {
+        return this.body || this.container;
     }
 
     /**
@@ -175,42 +199,31 @@ export class PropertiesPanel extends Component {
     }
 
     /**
-     * Render selection mode toggle button
+     * Render the shape/edge selection mode chooser as a labelled dropdown —
+     * morphTo picks what it is editing with a .shape-selector, not with a
+     * segmented control.
      */
-    renderSelectionModeToggle() {
+    renderSelectionModeField() {
         const currentMode = this.shapeStore.getSelectionMode();
 
-        const toggleContainer = this.createElement('div', {
-            class: 'selection-mode-toggle'
+        const field = this.createElement('div', { class: 'property-field' });
+        field.appendChild(this.createElement('label', {}, 'Mode'));
+
+        const select = this.createElement('select', {
+            class: 'shape-selector',
+            title: 'Shape Selection (V) / Edge Selection (E)'
+        });
+        [['shape', 'Shape selection'], ['edge', 'Edge selection']].forEach(([value, label]) => {
+            const option = this.createElement('option', { value }, label);
+            if (currentMode === value) option.selected = true;
+            select.appendChild(option);
+        });
+        select.addEventListener('change', () => {
+            this.shapeStore.setSelectionMode(select.value);
         });
 
-        const label = this.createElement('span', {
-            class: 'selection-mode-label'
-        }, 'Mode:');
-
-        const shapeBtn = this.createElement('button', {
-            class: `mode-btn ${currentMode === 'shape' ? 'mode-btn-active' : ''}`,
-            title: 'Shape Selection (V)'
-        }, 'Shape');
-
-        const edgeBtn = this.createElement('button', {
-            class: `mode-btn ${currentMode === 'edge' ? 'mode-btn-active' : ''}`,
-            title: 'Edge Selection (E)'
-        }, 'Edge');
-
-        shapeBtn.addEventListener('click', () => {
-            this.shapeStore.setSelectionMode('shape');
-        });
-
-        edgeBtn.addEventListener('click', () => {
-            this.shapeStore.setSelectionMode('edge');
-        });
-
-        toggleContainer.appendChild(label);
-        toggleContainer.appendChild(shapeBtn);
-        toggleContainer.appendChild(edgeBtn);
-
-        this.container.appendChild(toggleContainer);
+        field.appendChild(select);
+        this.mountTarget().appendChild(field);
     }
 
     /**
@@ -219,144 +232,93 @@ export class PropertiesPanel extends Component {
     renderEdgeInfo() {
         const selectedEdges = this.shapeStore.getSelectedEdges();
 
-        const edgeSection = this.createElement('div', {
-            class: 'edge-info-section'
-        });
+        const list = this.createElement('div', { class: 'parameters-list' });
 
-        const header = this.createElement('div', {
-            class: 'edge-info-header'
+        list.appendChild(this.createElement('div', {
+            class: 'parameter-label'
         }, selectedEdges.length > 0
             ? `${selectedEdges.length} Edge${selectedEdges.length !== 1 ? 's' : ''} Selected`
-            : 'No edges selected');
-
-        edgeSection.appendChild(header);
+            : 'No edges selected'));
 
         if (selectedEdges.length > 0) {
-            selectedEdges.forEach((edge, index) => {
-                const edgeItem = this.createElement('div', {
-                    class: 'edge-item'
-                });
-
-                const edgeName = this.createElement('span', {
-                    class: 'edge-name'
-                }, `Edge ${edge.index + 1}`);
-
-                const edgeLength = this.createElement('span', {
-                    class: 'edge-length'
-                }, `${edge.length().toFixed(2)} units`);
-
-                const edgeType = this.createElement('span', {
-                    class: `edge-type ${edge.isLinear() ? 'edge-linear' : 'edge-curved'}`
-                }, edge.isLinear() ? 'Linear' : 'Curved');
-
-                edgeItem.appendChild(edgeName);
-                edgeItem.appendChild(edgeLength);
-                edgeItem.appendChild(edgeType);
-
-                edgeSection.appendChild(edgeItem);
+            selectedEdges.forEach((edge) => {
+                const item = this.createElement('div', { class: 'parameter-item' });
+                item.appendChild(this.createElement('div', {
+                    class: 'selected-shape-info'
+                }, `Edge ${edge.index + 1} · ${edge.length().toFixed(2)} units · ${edge.isLinear() ? 'Linear' : 'Curved'}`));
+                list.appendChild(item);
             });
         } else {
-            const hint = this.createElement('div', {
-                class: 'edge-hint'
-            }, 'Click on an edge to select it. Hold Shift for multi-select.');
-            edgeSection.appendChild(hint);
+            list.appendChild(this.createElement('p', {
+                class: 'no-shapes-message'
+            }, 'Click on an edge to select it. Hold Shift for multi-select.'));
         }
 
-        this.container.appendChild(edgeSection);
+        this.mountTarget().appendChild(list);
     }
 
     /**
-     * Render all shapes in a compact layers-style list
+     * Render every shape as a labelled list box. Multi-selection is the list
+     * box's own shift/ctrl behaviour, so the panel needs no custom row chrome.
      * @param {Array<Shape>} shapes
      */
-    renderLayersList(shapes) {
-        // Render shapes in reverse order (last drawn = top of list)
-        const reversedShapes = [...shapes].reverse();
+    renderShapeSelector(shapes) {
+        const field = this.createElement('div', { class: 'property-field' });
+        field.appendChild(this.createElement('label', {}, 'Shapes'));
 
-        reversedShapes.forEach(shape => {
-            const layerItem = this.createLayerItem(shape);
-            this.container.appendChild(layerItem);
-        });
-    }
-
-    /**
-     * Create a layer item for a shape
-     * @param {Shape} shape
-     * @returns {HTMLElement}
-     */
-    createLayerItem(shape) {
-        const isSelected = this.selectedShapeIds.has(shape.id) || this.selectedShape?.id === shape.id;
-
-        const item = this.createElement('div', {
-            class: `layer-item ${isSelected ? 'layer-item-selected' : ''}`
+        const select = this.createElement('select', {
+            class: 'shape-selector',
+            multiple: true,
+            size: Math.min(Math.max(shapes.length, 2), 6)
         });
 
-        // Left side: selection dot and shape name
-        const leftSide = this.createElement('div', {
-            class: 'layer-item-left'
+        // Last drawn first, matching the drawing order users see on canvas.
+        [...shapes].reverse().forEach(shape => {
+            const option = this.createElement('option', {
+                value: shape.id
+            }, `${shape.id} (${shape.type})`);
+            if (this.selectedShapeIds.has(shape.id) || this.selectedShape?.id === shape.id) {
+                option.selected = true;
+            }
+            select.appendChild(option);
         });
 
-        // Selection indicator dot (filled when selected)
-        const dot = this.createElement('span', {
-            class: 'layer-item-dot'
-        });
-        leftSide.appendChild(dot);
-
-        // Shape name
-        const shapeName = this.createElement('span', {
-            class: 'layer-item-name'
-        }, shape.id);
-        leftSide.appendChild(shapeName);
-
-        // Right side: a muted badge naming the shape type
-        const typeBadge = this.createElement('span', {
-            class: 'layer-type-badge'
-        }, shape.type);
-
-        item.appendChild(leftSide);
-        item.appendChild(typeBadge);
-
-        // Click to select
-        item.addEventListener('click', (e) => {
-            const shiftKey = e.shiftKey;
-            if (shiftKey) {
-                // Multi-select
-                if (isSelected) {
-                    this.shapeStore.removeFromSelection(shape.id);
-                    this.selectedShapeIds.delete(shape.id);
-                } else {
-                    this.shapeStore.addToSelection(shape.id);
-                    this.selectedShapeIds.add(shape.id);
-                }
+        select.addEventListener('change', () => {
+            const ids = Array.from(select.selectedOptions || []).map(option => option.value);
+            if (ids.length === 0) {
+                this.shapeStore.clearSelection();
+                this.selectedShape = null;
+                this.selectedShapeIds.clear();
             } else {
-                // Single select
-                this.shapeStore.setSelected(shape.id);
-                this.selectedShape = shape;
-                this.selectedShapeIds = new Set([shape.id]);
+                this.shapeStore.setSelectedIds(ids);
+                this.selectedShapeIds = new Set(ids);
+                this.selectedShape = this.shapeStore.get(ids[0]);
             }
 
             EventBus.emit(EVENTS.SHAPE_SELECTED, {
-                id: shape.id,
-                shape: shape,
-                selectedIds: Array.from(this.selectedShapeIds)
+                id: ids[0] || null,
+                shape: this.selectedShape,
+                selectedIds: ids
             });
 
             this.render();
         });
 
-        return item;
+        field.appendChild(select);
+        this.mountTarget().appendChild(field);
     }
 
     /**
-     * Render empty state
+     * Render empty state, reusing morphTo's own wording for an empty scene.
      */
     renderEmpty() {
-        const message = this.createElement('div', {
-            class: 'properties-empty'
-        }, 'No shapes');
+        const message = this.createElement('p', {
+            class: 'no-shapes-message'
+        }, 'No shapes found. Create shapes in the editor first.');
 
-        if (this.container) {
-            this.container.appendChild(message);
+        const target = this.mountTarget();
+        if (target) {
+            target.appendChild(message);
         } else {
             console.warn('PropertiesPanel: Cannot render empty state, container is null');
         }
@@ -376,26 +338,16 @@ export class PropertiesPanel extends Component {
         }
 
         // Header showing count
-        const header = this.createElement('div', {
-            class: 'properties-header'
-        }, `${selectedShapes.length} Shapes Selected`);
-        this.container.appendChild(header);
+        this.mountTarget().appendChild(this.createElement('div', {
+            class: 'parameter-label'
+        }, `${selectedShapes.length} Shapes Selected`));
 
         // Render each shape's properties vertically
-        selectedShapes.forEach((shape, index) => {
-            // Add separator between shapes (except before first)
-            if (index > 0) {
-                const separator = this.createElement('div', {
-                    class: 'properties-separator'
-                });
-                this.container.appendChild(separator);
-            }
-
+        selectedShapes.forEach(shape => {
             // Shape type header (e.g., "Circle")
-            const shapeHeader = this.createElement('div', {
-                class: 'properties-section-header'
-            }, shape.type.charAt(0).toUpperCase() + shape.type.slice(1));
-            this.container.appendChild(shapeHeader);
+            this.mountTarget().appendChild(this.createElement('div', {
+                class: 'parameter-label'
+            }, shape.type.charAt(0).toUpperCase() + shape.type.slice(1)));
 
             // Render all properties for this shape (same as single selection)
             this.renderPropertiesForShape(shape);
@@ -407,62 +359,53 @@ export class PropertiesPanel extends Component {
      * @param {Shape} shape
      */
     renderPropertiesForShape(shape) {
-        // Shape ID — a compact, read-only caption
-        const idDiv = this.createElement('div', {
-            class: 'property-id'
-        });
-        idDiv.appendChild(this.createElement('span', {
-            class: 'property-id-label'
-        }, 'ID'));
-        idDiv.appendChild(this.createElement('span', {
-            class: 'property-id-value'
-        }, shape.id));
-        this.container.appendChild(idDiv);
+        // Shape ID — a compact, read-only caption, in morphTo's selection-info type
+        this.mountTarget().appendChild(this.createElement('div', {
+            class: 'selected-shape-info'
+        }, `ID: ${shape.id}`));
 
-        // Bindable properties laid out in a compact two-column grid. Each cell
+        // Bindable properties stacked as morphTo property fields. Each field
         // shows just the value; the parameter/formula controls stay hidden
-        // behind a per-field ƒx toggle so the panel fits without scrolling.
-        const grid = this.createElement('div', { class: 'properties-grid' });
+        // behind a per-field ƒx toggle so the panel stays compact.
+        const list = this.createElement('div', { class: 'parameters-list' });
 
         shape.getBindableProperties().forEach(property => {
-            grid.appendChild(this.createPropertyCell(shape, property));
+            list.appendChild(this.createPropertyField(shape, property));
         });
 
-        // Enum properties (e.g. facePlane) — a full-width dropdown cell, since
-        // they are not numeric/bindable.
+        // Enum properties (e.g. facePlane) — a dropdown field, since they are
+        // not numeric/bindable.
         const schema = shape.constructor.fullSchema ?? {};
         for (const [prop, desc] of Object.entries(schema)) {
             if (desc.type !== 'enum') continue;
-            grid.appendChild(this.renderEnumProperty(shape, prop, desc));
+            list.appendChild(this.renderEnumProperty(shape, prop, desc));
         }
 
-        this.container.appendChild(grid);
+        this.mountTarget().appendChild(list);
     }
 
     /**
-     * Build one grid cell for a bindable property. A literal value renders as a
-     * single compact input; a parameter/formula binding (or a cell the user has
-     * expanded via ƒx) renders full-width with the binding editor.
+     * Build one .property-field for a bindable property. A literal value renders
+     * as a single input; a parameter/formula binding (or a field the user has
+     * expanded via ƒx) also renders the binding editor.
      * @param {Shape} shape
      * @param {string} property
      * @returns {HTMLElement}
      */
-    createPropertyCell(shape, property) {
+    createPropertyField(shape, property) {
         const binding = shape.getBinding(property);
         const isBound = !!binding && binding.type !== 'literal';
         const key = `${shape.id}:${property}`;
         const expanded = isBound || this.expandedBindings.has(key);
 
-        const cell = this.createElement('div', {
-            class: `prop-cell${expanded ? ' prop-cell-wide' : ''}`
-        });
+        const field = this.createElement('div', { class: 'property-field' });
 
         // Header: property name + ƒx toggle for the binding controls.
-        const head = this.createElement('div', { class: 'prop-cell-head' });
+        const head = this.createElement('div', { class: 'parameter-slider-container' });
         head.appendChild(this.createElement('label', {}, property));
 
         const fx = this.createElement('button', {
-            class: `prop-fx-btn${expanded ? ' prop-fx-btn-active' : ''}`,
+            class: 'doc-tab-close',
             type: 'button',
             title: expanded ? 'Hide binding options' : 'Bind to a parameter or formula'
         }, 'ƒx');
@@ -476,7 +419,7 @@ export class PropertiesPanel extends Component {
             this.render();
         });
         head.appendChild(fx);
-        cell.appendChild(head);
+        field.appendChild(head);
 
         if (expanded) {
             // Resolve the current value for display in the binding editor.
@@ -490,29 +433,27 @@ export class PropertiesPanel extends Component {
                     currentValue = shape[property];
                 }
             }
-            cell.appendChild(this.renderBindingEditor(property, binding, currentValue, shape));
+            field.appendChild(this.renderBindingEditor(property, binding, currentValue, shape));
         } else {
-            cell.appendChild(this.renderLiteralInput(property, shape[property], shape));
+            field.appendChild(this.renderLiteralInput(property, shape[property], shape));
         }
 
-        return cell;
+        return field;
     }
 
     /**
-     * Render a labelled dropdown cell for an enum schema property, dispatching a
-     * SetShapePropertyCommand on change (falls back to a direct write).
+     * Render a labelled dropdown field for an enum schema property, dispatching
+     * a SetShapePropertyCommand on change (falls back to a direct write).
      * @param {Shape} shape
      * @param {string} property
      * @param {Object} desc - PropertyDescriptor with options / optionLabels.
      * @returns {HTMLElement}
      */
     renderEnumProperty(shape, property, desc) {
-        const cell = this.createElement('div', { class: 'prop-cell prop-cell-wide' });
-        const head = this.createElement('div', { class: 'prop-cell-head' });
-        head.appendChild(this.createElement('label', {}, desc.label || property));
-        cell.appendChild(head);
+        const field = this.createElement('div', { class: 'property-field' });
+        field.appendChild(this.createElement('label', {}, desc.label || property));
 
-        const select = this.createElement('select', { class: 'binding-input' });
+        const select = this.createElement('select', { class: 'shape-selector' });
         (desc.options || []).forEach(opt => {
             const label = (desc.optionLabels && desc.optionLabels[opt]) || opt;
             const option = this.createElement('option', { value: opt }, label);
@@ -528,8 +469,8 @@ export class PropertiesPanel extends Component {
                 EventBus.emit(EVENTS.PARAM_CHANGED, { shapeId: shape.id, property });
             }
         });
-        cell.appendChild(select);
-        return cell;
+        field.appendChild(select);
+        return field;
     }
 
     /**
@@ -553,10 +494,9 @@ export class PropertiesPanel extends Component {
      */
     renderProperties(shape) {
         // Shape type header
-        const header = this.createElement('div', {
-            class: 'properties-header'
-        }, `${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} Properties`);
-        this.container.appendChild(header);
+        this.mountTarget().appendChild(this.createElement('div', {
+            class: 'parameter-label'
+        }, `${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} Properties`));
 
         // Use the shared method
         this.renderPropertiesForShape(shape);
@@ -574,12 +514,12 @@ export class PropertiesPanel extends Component {
         // Use selectedShape if shape not provided (for backward compatibility)
         const targetShape = shape || this.selectedShape;
         const editor = this.createElement('div', {
-            class: 'binding-editor'
+            class: 'parameters-list'
         });
 
         // Binding type selector
         const typeSelect = this.createElement('select', {
-            class: 'binding-type-select'
+            class: 'shape-selector'
         });
 
         const literalOption = this.createElement('option', {
@@ -605,7 +545,7 @@ export class PropertiesPanel extends Component {
 
         // Binding value container
         const valueContainer = this.createElement('div', {
-            class: 'binding-value-container'
+            class: 'parameter-item'
         });
 
         // Initial render of binding input
@@ -634,9 +574,9 @@ export class PropertiesPanel extends Component {
 
         updateBindingInput();
 
-        // Value control fills the row; the type selector sits compactly beside it.
-        editor.appendChild(valueContainer);
+        // Type selector on top (morphTo stacks its selectors), value below.
         editor.appendChild(typeSelect);
+        editor.appendChild(valueContainer);
 
         return editor;
     }
@@ -667,7 +607,6 @@ export class PropertiesPanel extends Component {
         const display = this.formatNumber(currentValue);
         const input = this.createElement('input', {
             type: 'number',
-            class: 'binding-input binding-literal',
             value: display,
             step: 'any'
         });
@@ -706,7 +645,7 @@ export class PropertiesPanel extends Component {
     renderParameterDropdown(property, selectedParamId, shape = null) {
         const targetShape = shape || this.selectedShape;
         const select = this.createElement('select', {
-            class: 'binding-input binding-parameter'
+            class: 'shape-selector'
         });
 
         // Add empty option
@@ -748,7 +687,6 @@ export class PropertiesPanel extends Component {
         const targetShape = shape || this.selectedShape;
         const input = this.createElement('input', {
             type: 'text',
-            class: 'binding-input binding-expression',
             value: expression || '',
             placeholder: 'e.g., radius * 2 + 10'
         });

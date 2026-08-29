@@ -1,6 +1,15 @@
 /**
  * Edge Joinery Context Menu
  * Shows joint type options and parameters for the selected edge.
+ *
+ * morphTo has no joinery UI of its own, so this popover borrows morphTo's
+ * chrome instead of inventing any: the shell is a .parameters-container (the
+ * cream popup used for the parameter manager and the inspector), the joint
+ * types are .doc-tab rows (morphTo's selectable-item pill, orange when
+ * active), the inputs are .property-field rows from the shape-property editor,
+ * and the footer is .modal-buttons with morphTo's .button. Positioning and
+ * visibility are set inline, because .parameters-container is `display: none`
+ * / `position: absolute` by default and this popover follows the cursor.
  */
 import { FocusTrap } from './a11y/FocusTrap.js';
 import { JOINT_TYPES, ALIGN_OPTIONS, normalizeJoineryType } from '../models/joinery.js';
@@ -17,7 +26,12 @@ export class EdgeJoineryMenu {
         this.activeAlign = DEFAULT_ALIGN;
         this.isOpen = false;
         this.root = document.createElement('div');
-        this.root.className = 'edge-joinery-menu';
+        // morphTo's popup panel, pinned to the cursor rather than to the
+        // top-right corner the class normally places it in.
+        this.root.className = 'parameters-container edge-joinery-menu';
+        this.root.style.position = 'fixed';
+        this.root.style.right = 'auto';
+        this.root.style.display = 'none';
         // A modal-ish popover for configuring an edge joint: dialog semantics
         // + focus trap so keyboard users stay within it until they act/dismiss.
         this.root.setAttribute('role', 'dialog');
@@ -28,7 +42,6 @@ export class EdgeJoineryMenu {
         this.root.addEventListener('contextmenu', (e) => e.preventDefault());
 
         this.typeButtons = new Map();
-        this.alignButtons = new Map();
         this.buildMenu();
 
         document.body.appendChild(this.root);
@@ -38,15 +51,30 @@ export class EdgeJoineryMenu {
     }
 
     buildMenu() {
+        const content = document.createElement('div');
+        content.className = 'parameters-content';
+
+        const heading = document.createElement('div');
+        heading.className = 'parameter-label';
+        heading.textContent = 'Edge joinery';
+        content.appendChild(heading);
+
         const list = document.createElement('div');
-        list.className = 'edge-joinery-menu__list';
+        list.className = 'parameters-list';
 
         JOINT_TYPES.forEach((joint) => {
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'edge-joinery-menu__item';
-            button.textContent = joint.label;
+            // .doc-tab is morphTo's selectable list item; .active paints the
+            // orange border it uses for the current document tab.
+            button.className = 'doc-tab';
             button.setAttribute('role', 'menuitem');
+
+            const label = document.createElement('span');
+            label.className = 'doc-tab-title';
+            label.textContent = joint.label;
+            button.appendChild(label);
+
             button.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.setActiveType(joint.id, true);
@@ -55,22 +83,24 @@ export class EdgeJoineryMenu {
             list.appendChild(button);
         });
 
+        content.appendChild(list);
+
         this.submenu = document.createElement('div');
-        this.submenu.className = 'edge-joinery-menu__submenu';
+        this.submenu.className = 'parameters-list';
+        this.submenu.style.display = 'none';
 
         this.submenuTitle = document.createElement('div');
-        this.submenuTitle.className = 'edge-joinery-menu__title';
+        this.submenuTitle.className = 'parameter-label';
         this.submenu.appendChild(this.submenuTitle);
 
         this.submenuDesc = document.createElement('p');
-        this.submenuDesc.className = 'edge-joinery-menu__desc';
+        this.submenuDesc.className = 'no-shapes-message';
         this.submenu.appendChild(this.submenuDesc);
 
         const thicknessGroup = document.createElement('div');
-        thicknessGroup.className = 'edge-joinery-menu__field';
+        thicknessGroup.className = 'property-field';
 
         const thicknessLabel = document.createElement('label');
-        thicknessLabel.className = 'edge-joinery-menu__label';
         thicknessLabel.textContent = 'Thickness (mm)';
         thicknessLabel.setAttribute('for', 'edge-joinery-thickness');
 
@@ -92,10 +122,9 @@ export class EdgeJoineryMenu {
         this.submenu.appendChild(thicknessGroup);
 
         const countGroup = document.createElement('div');
-        countGroup.className = 'edge-joinery-menu__field';
+        countGroup.className = 'property-field';
 
         const countLabel = document.createElement('label');
-        countLabel.className = 'edge-joinery-menu__label';
         countLabel.textContent = 'Finger count';
         countLabel.setAttribute('for', 'edge-joinery-count');
 
@@ -116,47 +145,44 @@ export class EdgeJoineryMenu {
         countGroup.appendChild(this.countInput);
         this.submenu.appendChild(countGroup);
 
-        // Alignment buttons
+        // Alignment: a .shape-selector dropdown, the control morphTo already
+        // uses for "pick one of these" inside a popup panel.
         const alignGroup = document.createElement('div');
-        alignGroup.className = 'edge-joinery-menu__field';
+        alignGroup.className = 'property-field';
 
         const alignLabel = document.createElement('label');
-        alignLabel.className = 'edge-joinery-menu__label';
         alignLabel.textContent = 'Alignment';
+        alignLabel.setAttribute('for', 'edge-joinery-align');
 
-        const alignButtonsContainer = document.createElement('div');
-        alignButtonsContainer.className = 'edge-joinery-menu__align-buttons';
-
+        this.alignSelect = document.createElement('select');
+        this.alignSelect.className = 'shape-selector';
+        this.alignSelect.id = 'edge-joinery-align';
         ALIGN_OPTIONS.forEach((opt) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'edge-joinery-menu__align-btn';
-            btn.textContent = opt.label;
-            btn.dataset.align = opt.id;
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.setActiveAlign(opt.id);
-            });
-            this.alignButtons.set(opt.id, btn);
-            alignButtonsContainer.appendChild(btn);
+            const option = document.createElement('option');
+            option.value = opt.id;
+            option.textContent = opt.label;
+            this.alignSelect.appendChild(option);
+        });
+        this.alignSelect.addEventListener('change', () => {
+            this.activeAlign = this.alignSelect.value;
         });
 
         alignGroup.appendChild(alignLabel);
-        alignGroup.appendChild(alignButtonsContainer);
+        alignGroup.appendChild(this.alignSelect);
         this.submenu.appendChild(alignGroup);
 
         const actions = document.createElement('div');
-        actions.className = 'edge-joinery-menu__actions';
+        actions.className = 'modal-buttons';
 
         this.applyButton = document.createElement('button');
         this.applyButton.type = 'button';
-        this.applyButton.className = 'edge-joinery-menu__apply';
+        this.applyButton.className = 'button';
         this.applyButton.textContent = 'Apply';
         this.applyButton.addEventListener('click', () => this.applyJoinery());
 
         this.cancelButton = document.createElement('button');
         this.cancelButton.type = 'button';
-        this.cancelButton.className = 'edge-joinery-menu__cancel';
+        this.cancelButton.className = 'button';
         this.cancelButton.textContent = 'Cancel';
         this.cancelButton.addEventListener('click', () => this.hide());
 
@@ -164,8 +190,8 @@ export class EdgeJoineryMenu {
         actions.appendChild(this.cancelButton);
         this.submenu.appendChild(actions);
 
-        this.root.appendChild(list);
-        this.root.appendChild(this.submenu);
+        content.appendChild(this.submenu);
+        this.root.appendChild(content);
     }
 
     show({ x, y, edge }) {
@@ -205,7 +231,7 @@ export class EdgeJoineryMenu {
     hide() {
         if (!this.isOpen) return;
         this.isOpen = false;
-        this.root.classList.remove('is-open');
+        this.root.style.display = 'none';
         this.root.setAttribute('aria-hidden', 'true');
         document.removeEventListener('mousedown', this.onDocumentMouseDown);
         document.removeEventListener('keydown', this.onDocumentKeyDown);
@@ -216,7 +242,7 @@ export class EdgeJoineryMenu {
 
     open() {
         this.isOpen = true;
-        this.root.classList.add('is-open');
+        this.root.style.display = 'block';
         this.root.setAttribute('aria-hidden', 'false');
         // Trap keyboard focus inside the dialog while it is open.
         this.focusTrap = new FocusTrap(this.root);
@@ -243,7 +269,7 @@ export class EdgeJoineryMenu {
     setActiveType(type, openSubmenu) {
         this.activeType = type;
         this.typeButtons.forEach((button, id) => {
-            button.classList.toggle('is-active', id === type);
+            button.classList.toggle('active', id === type);
         });
         if (type && openSubmenu) {
             const joint = JOINT_TYPES.find((item) => item.id === type);
@@ -261,19 +287,17 @@ export class EdgeJoineryMenu {
 
     setActiveAlign(align) {
         this.activeAlign = align;
-        this.alignButtons.forEach((button, id) => {
-            button.classList.toggle('is-active', id === align);
-        });
+        if (this.alignSelect) {
+            this.alignSelect.value = align;
+        }
     }
 
     openSubmenu() {
-        this.root.classList.add('has-submenu');
-        this.submenu.classList.add('is-open');
+        this.submenu.style.display = 'block';
     }
 
     closeSubmenu() {
-        this.root.classList.remove('has-submenu');
-        this.submenu.classList.remove('is-open');
+        this.submenu.style.display = 'none';
     }
 
     applyJoinery() {
@@ -308,7 +332,7 @@ export class EdgeJoineryMenu {
         this.root.style.left = `${x}px`;
         this.root.style.top = `${y}px`;
         this.root.style.visibility = 'hidden';
-        this.root.classList.add('is-open');
+        this.root.style.display = 'block';
 
         const rect = this.root.getBoundingClientRect();
         const padding = 8;
@@ -330,4 +354,3 @@ export class EdgeJoineryMenu {
 }
 
 export { JOINT_TYPES, ALIGN_OPTIONS };
-
