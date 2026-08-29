@@ -1679,7 +1679,10 @@ body {
 .example-blockly-viewer .blocklyMainBackground { cursor: grab; }
 .example-blockly-viewer .blocklyMainBackground:active { cursor: grabbing; }
 
-/* ── Engine mount points ───────────────────────────────────────────────── */
+/* ── Engine mount points ───────────────────────────────────────────────────
+   Everything below exists because the engine's components need somewhere to
+   mount or render markup morphTo never had. Anything morphTo already styles
+   is left to morphTo's own rules above. */
 
 /* Off-screen live regions: announced by assistive tech, never painted. */
 .visually-hidden {
@@ -1695,216 +1698,25 @@ body {
   border: 0;
 }
 
-/* Host for ZoomControls; the controls carry their own positioning. */
+/* Mount host for ZoomControls. It must not form a containing block of its
+   own: the controls it renders are morphTo's .canvas-zoom-controls, already
+   positioned against .visualization-panel, so the host box is dissolved. */
 .zoom-controls-container {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 900;
+  display: contents;
 }
 
-/* ── Engine components in morphTo's clothing ───────────────────────────────
-   The engine's UI components render their own markup with their own class
-   names. Rather than fork them, map those classes onto morphTo's existing
-   visual language here. Anything morphTo's own chrome already provides is
-   hidden rather than duplicated. */
-
-/* Code editor: morphTo's footer owns Run / View AST / Errors, and the editor
-   pane is just the editor, so the component's own header and output strip
-   are suppressed. */
-.code-editor__header,
-.code-editor__output {
-  display: none !important;
-}
-
-.code-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.code-editor__wrapper {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.code-editor__wrapper .CodeMirror {
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-}
-
-/* Document tabs: the engine's TabBar renders into #doc-tabs, so its items
-   take morphTo's .doc-tab styling. morphTo supplies its own "+" (#doc-new),
-   so the component's own new-tab control is hidden. */
-.tab-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 320px;
-  min-width: 160px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  background: #f6f6f6;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: monospace;
-  font-size: 12px;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.tab-item.tab-active {
-  background: white;
-  border-color: #FF5722;
-}
-
-.tab-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tab-close {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: #888;
-  font-size: 14px;
-  line-height: 1;
-  padding: 0 2px;
-}
-
-.tab-close:hover {
-  color: #FF5722;
-}
-
-.tab-new {
-  display: none;
-}
-
-.tab-rename-input {
-  flex: 1;
-  min-width: 0;
-  font-family: monospace;
-  font-size: 12px;
-  border: 1px solid #FF5722;
-  border-radius: 4px;
-  padding: 2px 4px;
-}
-
-/* Zoom controls: the engine's ZoomControls in morphTo's canvas-button style.
-   The component appends [zoom out, level, zoom in, fit, reset]; morphTo shows
-   zoom in / level / zoom out top-to-bottom, so the column is reversed and the
-   two extra buttons are hidden (the level readout already reads 100%). */
-.zoom-controls {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 4px;
-}
-
-.zoom-btn {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 500;
-  color: #6B7280;
-  transition: all 0.2s ease;
-}
-
-.zoom-btn:hover {
-  background: rgba(255, 255, 255, 1);
-  color: #FF5722;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.zoom-display {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  padding: 8px 4px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #6B7280;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  font-family: 'SF Mono', Monaco, monospace;
-}
-
-/* Shape palette body: the engine's ShapeLibrary mounts inside morphTo's
-   .palette-content, so it scrolls within the popup. */
-#shape-library-container {
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-/* Inspector popup: Properties above Parameters inside .parameters-container. */
-#inspector-panel {
-  display: none;
-}
-
+/* Inspector popup: the engine's PropertiesPanel sits above its
+   ParametersMenu inside one of morphTo's .parameters-container popups. */
 #properties-panel-container {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #ccc;
   padding-bottom: 8px;
   margin-bottom: 8px;
 }
 
-/* The engine paints the work surface itself (GridPass), so the element must
-   not also carry a background — a dark-scheme viewer would otherwise tint
-   the drawing area. */
-#canvas {
-  background: transparent !important;
-}
-
-/* Hidden after .zoom-btn sets `display`, so these win the cascade. */
-.zoom-btn-fit,
-.zoom-btn-reset {
-  display: none;
-}
-
-/* Constraint list popup, sharing the parameters popup's styling. */
-.constraints-title {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #333;
-}
-
-.constraint-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  font-family: monospace;
-  font-size: 11px;
-  border-bottom: 1px solid #eee;
-}
-
-.constraint-row:last-child {
-  border-bottom: none;
-}
-
-.constraint-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* The only rule the constraint list needs: morphTo styled its rows inline
+   (constraints/ui.mjs:159-191) and ConstraintController reproduces that. This
+   pair survives solely because ParametersMenu reuses the class for the delete
+   button on its parameter meta row (ui/ParametersMenu.js:344-346). */
 .constraint-remove {
   border: none;
   background: transparent;
@@ -1918,8 +1730,51 @@ body {
   color: #FF5722;
 }
 
-.constraints-empty {
-  color: #888;
-  font-size: 11px;
-  font-style: italic;
+/* ── Otto-only affordances in the parameters popup ──────────────────────────
+   REF has no equivalent for any of these: its parameter menu offers sliders
+   only, with no title, no add button and no min/max/step editing. The meta
+   row is hidden until a parameter is expanded, so the popup's resting state
+   is unchanged. Without these the four number boxes overflow the 250px
+   popup, since .parameter-value's default width is sized for one value.
+   Emitted by ui/ParametersMenu.js:166, 185, 294-332. */
+.parameters-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
 }
+
+.parameter-meta-row {
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.parameter-meta-row .parameter-value {
+  width: 44px;
+  font-size: 11px;
+}
+
+/* Must follow the rule above: same specificity, and the name box carries both
+   classes, so source order is what lets it keep its flexible width. */
+.parameter-meta-row .param-name {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  text-align: left;
+}
+
+.parameter-add {
+  width: 100%;
+  margin-right: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* Entrance stagger for the 5 Otto-only palette tiles. morphTo's own sequence
+   (styles.css:1440-1451) runs 1-12 at a flat +0.05s; these continue it rather
+   than editing that block, so REF's region of this file stays byte-identical. */
+.palette-grid .palette-item:nth-child(13) { animation-delay: 0.65s; }
+.palette-grid .palette-item:nth-child(14) { animation-delay: 0.7s; }
+.palette-grid .palette-item:nth-child(15) { animation-delay: 0.75s; }
+.palette-grid .palette-item:nth-child(16) { animation-delay: 0.8s; }
+.palette-grid .palette-item:nth-child(17) { animation-delay: 0.85s; }

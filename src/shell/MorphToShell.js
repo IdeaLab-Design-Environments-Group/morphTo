@@ -30,7 +30,8 @@ export const MORPHTO_ELEMENT_IDS = {
     canvas: 'canvas',
     parametersMenu: 'parameters-menu-container',
     propertiesPanel: 'properties-panel-container',
-    coachButton: 'btn-ai-coach',
+    // No coachButton: morphTo's footer has no AI button, and the engine treats
+    // the coach panel as optional, so its default id resolves to nothing.
     zoomControls: 'zoom-controls-container',
     blockly: 'blockly-editor-container',
     codeEditor: 'text-editor-container',
@@ -126,6 +127,12 @@ export class MorphToShell {
     /** Footer Run button + the canonical run path used by every caller. */
     wireEditorToolbar() {
         this.el('run-button')?.addEventListener('click', () => this.run());
+        // morphTo bound Shift/Ctrl/Cmd-Enter to the whole runCode pipeline, not
+        // just execution, so claim the editor's run hook too — otherwise those
+        // keys skip the error panel and the constraint re-solve.
+        if (this.app.codeEditor) {
+            this.app.codeEditor.onRunRequest = () => this.run();
+        }
     }
 
     /**
@@ -142,7 +149,7 @@ export class MorphToShell {
             // A `constraints { }` block in the source is solved here — the
             // language records them, the solver resolves them.
             this.constraints.syncFromRun(result);
-            this.renderConstraints();
+            this.constraints.renderList();
         }
         return result;
     }
@@ -179,21 +186,45 @@ export class MorphToShell {
     }
 
     /**
-     * Render errors into morphTo's panel and badge.
-     * @param {string[]} errors
+     * Render errors into morphTo's panel, badge and button — a port of
+     * morphTo's `displayErrors` (app.js:1572-1613): each error becomes its own
+     * `.error-message` div, with an `.error-location` line when the error
+     * carries one, and the Errors button turns pink via `.button.error`.
+     * @param {Array<string|{message?: string, line?: number, column?: number}>} errors
      */
     showErrors(errors) {
         const output = this.el('error-output');
         const count = this.el('error-count');
         const panel = this.el('error-panel');
+        const button = this.el('view-errors');
+
         if (count) {
             count.textContent = String(errors.length);
             // morphTo hides the badge at zero.
             count.classList.toggle('visible', errors.length > 0);
         }
-        if (output) {
-            output.textContent = errors.length ? errors.join('\n') : '// No errors.';
+        button?.classList.toggle('error', errors.length > 0);
+
+        if (output && errors.length === 0) {
+            output.textContent = 'No errors';
+        } else if (output) {
+            output.textContent = '';
+            for (const error of errors) {
+                const message = document.createElement('div');
+                message.className = 'error-message';
+                message.textContent = error?.message ?? String(error);
+                output.appendChild(message);
+
+                if (error?.line || error?.column) {
+                    const location = document.createElement('div');
+                    location.className = 'error-location';
+                    location.textContent =
+                        `Line ${error.line || '?'}, Column ${error.column || '?'}`;
+                    output.appendChild(location);
+                }
+            }
         }
+
         if (panel && errors.length) panel.classList.add('visible');
     }
 
@@ -275,57 +306,15 @@ export class MorphToShell {
         this.constraints = new ConstraintController(this.app.context, {
             onChanged: () => this.app.canvasView?.render()
         });
-        this.app.canvasView?.setConstraintSource({
-            getConstraints: () => this.constraints.engine.getConstraintSnapshot(),
-            getGeometry: (c) => this.constraints.engine.getConstraintGeometry(c)
-        });
+        // canvasSource() also supplies getHoveredId/getSelectedId, which the
+        // canvas pass needs for morphTo's hover and selected glyph states.
+        this.app.canvasView?.setConstraintSource(this.constraints.canvasSource());
+        this.constraints.attachList(this.el('constraints-list'));
 
         const panel = this.el('constraints-panel');
         this.el('constraints-button')?.addEventListener('click', () => {
-            if (!panel) return;
-            const open = panel.style.display === 'block';
-            panel.style.display = open ? 'none' : 'block';
-            if (!open) this.renderConstraints();
+            this.constraints.togglePanel(panel);
         });
-    }
-
-    /** Rebuild the constraint list in the popup. */
-    renderConstraints() {
-        const list = this.el('constraints-list');
-        if (!list || !this.constraints) return;
-        list.innerHTML = '';
-
-        const entries = this.constraints.list();
-        if (entries.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'constraints-empty';
-            empty.textContent = 'No constraints. Declare them in a constraints { } block.';
-            list.appendChild(empty);
-            return;
-        }
-
-        for (const { id, label } of entries) {
-            const row = document.createElement('div');
-            row.className = 'constraint-row';
-
-            const text = document.createElement('span');
-            text.className = 'constraint-label';
-            text.textContent = label;
-            row.appendChild(text);
-
-            const remove = document.createElement('button');
-            remove.className = 'constraint-remove';
-            remove.type = 'button';
-            remove.title = 'Remove constraint';
-            remove.textContent = '×';
-            remove.addEventListener('click', () => {
-                this.constraints.remove(id);
-                this.renderConstraints();
-            });
-            row.appendChild(remove);
-
-            list.appendChild(row);
-        }
     }
 
     /**

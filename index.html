@@ -750,7 +750,7 @@
         <canvas id="canvas"></canvas>
 
         <!-- Grid toggle (top-left) and shape palette toggle (top-right) -->
-        <button class="grid-toggle-button active" id="grid-toggle-btn" type="button" title="Toggle Grid">
+        <button class="grid-toggle-button" id="grid-toggle-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="5" cy="5" r="1" fill="currentColor"/>
             <circle cx="12" cy="5" r="1" fill="currentColor"/>
@@ -763,7 +763,7 @@
             <circle cx="19" cy="19" r="1" fill="currentColor"/>
           </svg>
         </button>
-        <button class="palette-toggle-button" id="palette-toggle" type="button" title="Toggle Shape Palette">⊞</button>
+        <button class="palette-toggle-button" id="palette-toggle" title="Toggle Shape Palette">⊞</button>
         <div class="shape-palette-container" id="shape-palette">
           <div class="palette-header">
             <h3>Shape Palette</h3>
@@ -780,7 +780,7 @@
 
         <!-- Constraints declared in AQUI, listed for review and removal -->
         <div class="parameters-container" id="constraints-panel">
-          <h4 class="constraints-title">Constraints</h4>
+          <div style="font-weight:bold; margin-top:10px;">Active Constraints</div>
           <div id="constraints-list"></div>
         </div>
 
