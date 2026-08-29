@@ -123,7 +123,7 @@ test('canvas stack renders the 18-shape fixture scene without throwing', async (
         assert(log.includes('clearRect'), 'clears the canvas');
         assert(log.filter(op => op === 'stroke').length >= 18, `strokes all shapes (${log.filter(op => op === 'stroke').length})`);
         assert(vc.cssWidth === 800 && vc.cssHeight === 600, 'viewport controller learned canvas size');
-        assert(vc.baseZoom === 2, 'baseZoom = min(800,600)/300');
+        assert(vc.baseZoom === 1, 'baseZoom is 1: true 1:1, one CSS pixel per mm');
     } finally {
         restore();
     }

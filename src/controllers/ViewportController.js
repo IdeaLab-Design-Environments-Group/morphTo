@@ -20,8 +20,9 @@
 import EventBus, { EVENTS } from '../events/EventBus.js';
 
 /** Zoom clamp range, matching the original canvas behavior. */
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 5;
+// Zoom limits, matching morphTo's coordinate system.
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 6;
 
 export class ViewportController {
     /**
@@ -61,8 +62,14 @@ export class ViewportController {
     }
 
     /**
-     * Record the canvas CSS size and derive baseZoom (min dimension / 300mm).
-     * Called by CanvasView whenever the canvas element resizes.
+     * Record the canvas CSS size. Called by CanvasView whenever the canvas
+     * element resizes.
+     *
+     * baseZoom is 1: one CSS pixel per millimetre at 100%, the true 1:1 scale
+     * morphTo's coordinate system is built around, so the rulers read real
+     * millimetres. (It used to be min(width, height) / 300, which made 100%
+     * mean roughly 3px/mm on a typical window and showed only a third of the
+     * work area.)
      *
      * @param {number} cssWidth
      * @param {number} cssHeight
@@ -70,7 +77,7 @@ export class ViewportController {
     setCanvasSize(cssWidth, cssHeight) {
         this.cssWidth = cssWidth;
         this.cssHeight = cssHeight;
-        this.baseZoom = Math.max(0.01, Math.min(cssWidth, cssHeight) / 300);
+        this.baseZoom = 1;
         if (!this.hasInitializedZoom) {
             this.viewport.zoom = this.baseZoom;
             // Put the world origin in the middle of the canvas rather than in

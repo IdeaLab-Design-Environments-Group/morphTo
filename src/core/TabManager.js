@@ -47,7 +47,7 @@ import { SceneState } from './SceneState.js';
  *     time (timestamp + random suffix).  Used as the key everywhere in
  *     TabManager.
  * @property {string}     name       Display name shown in the tab bar
- *     (e.g. "Scene 1").  Mutable via {@link TabManager#renameTab}.
+ *     (e.g. "Untitled 1").  Mutable via {@link TabManager#renameTab}.
  * @property {SceneState} sceneState The complete mutable state for this
  *     tab's scene.
  */
@@ -75,7 +75,7 @@ export class Tab {
 export class TabManager {
     /**
      * Bootstrap the manager with an empty tab list and immediately create
-     * the default "Scene 1" tab.  The default tab becomes the active tab
+     * the default "Untitled 1" tab.  The default tab becomes the active tab
      * because it is the only one.
      */
     constructor() {
@@ -95,7 +95,7 @@ export class TabManager {
         this.eventBus = EventBus;
 
         // Create initial tab
-        this.createTab('Scene 1');
+        this.createTab('Untitled 1');
     }
     
     /**
@@ -116,7 +116,7 @@ export class TabManager {
      *   emitted only when the active tab actually changes.
      *
      * @param {string} name  The display name for the new tab (e.g.
-     *     "Scene 2").
+     *     "Untitled 2").
      * @returns {Tab} The newly-created Tab object.
      */
     createTab(name) {

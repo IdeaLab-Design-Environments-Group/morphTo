@@ -50,6 +50,9 @@ export class MorphToShell {
         this.constraints = null;
     }
 
+    /** The comment morphTo's editor opened with. */
+    static STARTER_CODE = '//Otto by the IdeaLab Fablab\n\n';
+
     /** Wire every piece of morphTo chrome. Safe to call once, after app.init(). */
     mount() {
         this.claimEditorAuthority();
@@ -60,11 +63,26 @@ export class MorphToShell {
         this.wireEditorModeToggle();
         this.wireDocumentTabs();
         this.wireShapePalette();
+        this.wireGridToggle();
         this.wireInspector();
         this.wireExportMenu();
         this.registerExporters();
         this.setupConstraints();
         this.wireEditorTabActivation();
+        this.seedStarterCode();
+    }
+
+    /**
+     * Open with morphTo's starter comment, but only on a genuinely empty
+     * editor — a scene restored from autosave must not be written over.
+     */
+    seedStarterCode() {
+        requestAnimationFrame(() => {
+            const editor = this.app.codeEditor;
+            if (!editor || editor.getCode().trim()) return;
+            if (this.app.context?.shapeStore?.getAll().length) return;
+            editor.setCode(MorphToShell.STARTER_CODE, { silent: true });
+        });
     }
 
     /** @returns {?HTMLElement} */
@@ -213,6 +231,20 @@ export class MorphToShell {
         });
         this.el('palette-close')?.addEventListener('click', () => {
             palette.classList.remove('visible');
+        });
+    }
+
+    /** Grid toggle: morphTo's orange button in the canvas's top-left corner. */
+    wireGridToggle() {
+        const button = this.el('grid-toggle-btn');
+        if (!button) return;
+        const interaction = this.app.interaction;
+        button.classList.toggle('active', Boolean(interaction?.showGrid));
+        button.addEventListener('click', () => {
+            if (!interaction) return;
+            interaction.showGrid = !interaction.showGrid;
+            button.classList.toggle('active', interaction.showGrid);
+            this.app.canvasView?.render();
         });
     }
 

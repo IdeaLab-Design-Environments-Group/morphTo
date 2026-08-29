@@ -582,7 +582,7 @@ export class Application {
      */
     newTab() {
         const tabNumber = this.tabManager.tabs.length + 1;
-        this.tabManager.createTab(`Scene ${tabNumber}`);
+        this.tabManager.createTab(`Untitled ${tabNumber}`);
     }
 
     /**

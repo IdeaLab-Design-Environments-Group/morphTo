@@ -1699,7 +1699,7 @@ body {
 .zoom-controls-container {
   position: absolute;
   right: 16px;
-  bottom: 56px;
+  bottom: 16px;
   z-index: 900;
 }
 
@@ -1797,10 +1797,13 @@ body {
   padding: 2px 4px;
 }
 
-/* Zoom controls: the engine's ZoomControls in morphTo's canvas-button style. */
+/* Zoom controls: the engine's ZoomControls in morphTo's canvas-button style.
+   The component appends [zoom out, level, zoom in, fit, reset]; morphTo shows
+   zoom in / level / zoom out top-to-bottom, so the column is reversed and the
+   two extra buttons are hidden (the level readout already reads 100%). */
 .zoom-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 4px;
 }
 
@@ -1867,8 +1870,8 @@ body {
   background: transparent !important;
 }
 
-/* morphTo's canvas offers zoom out / level / zoom in; the level readout
-   already shows 100%, so the component's separate reset button is redundant. */
+/* Hidden after .zoom-btn sets `display`, so these win the cascade. */
+.zoom-btn-fit,
 .zoom-btn-reset {
   display: none;
 }

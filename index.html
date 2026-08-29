@@ -749,7 +749,20 @@
       <div class="visualization-panel">
         <canvas id="canvas"></canvas>
 
-        <!-- Shape palette: header is ours, the grid is mounted by ShapeLibrary -->
+        <!-- Grid toggle (top-left) and shape palette toggle (top-right) -->
+        <button class="grid-toggle-button active" id="grid-toggle-btn" type="button" title="Toggle Grid">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="5" cy="5" r="1" fill="currentColor"/>
+            <circle cx="12" cy="5" r="1" fill="currentColor"/>
+            <circle cx="19" cy="5" r="1" fill="currentColor"/>
+            <circle cx="5" cy="12" r="1" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1" fill="currentColor"/>
+            <circle cx="19" cy="12" r="1" fill="currentColor"/>
+            <circle cx="5" cy="19" r="1" fill="currentColor"/>
+            <circle cx="12" cy="19" r="1" fill="currentColor"/>
+            <circle cx="19" cy="19" r="1" fill="currentColor"/>
+          </svg>
+        </button>
         <button class="palette-toggle-button" id="palette-toggle" type="button" title="Toggle Shape Palette">⊞</button>
         <div class="shape-palette-container" id="shape-palette">
           <div class="palette-header">
@@ -796,7 +809,6 @@
       </button>
       <button class="button" id="params-button">Parameters</button>
       <button class="button" id="constraints-button">Constraints</button>
-      <button class="button" id="btn-ai-coach" title="AI Fabrication Coach">&#10022; AI</button>
       <div class="export-container">
         <button class="button" id="export-button">Export ▼</button>
         <div class="export-menu" id="export-menu">
