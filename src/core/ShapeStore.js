@@ -725,6 +725,78 @@ export class ShapeStore {
     }
 
     /**
+     * Drop joinery entries whose edge no longer exists.
+     *
+     * Joinery keys are positional -- {@code "<shapeId>:<pathIndex>:<index>"}
+     * -- so a geometry change that removes edges (a hexagon dropping to a
+     * triangle, a path losing a segment) leaves keys behind that no live
+     * edge resolves.  They are invisible in the UI but still serialize, and
+     * they silently reattach to an unrelated edge if the edge count later
+     * grows back.  Sweeping them keeps {@link #edgeJoinery} in step with the
+     * geometry.
+     *
+     * This does NOT prune itself: it changes document state, so the caller
+     * -- the command that changed the geometry -- runs it as part of that
+     * command and hands the returned entries to {@link #restoreJoinery} on
+     * undo.  That way one Ctrl+Z brings back both the geometry and its
+     * joinery, instead of the joinery being destroyed by an undoable edit.
+     *
+     * Legacy two-part keys ({@code "<pathIndex>:<index>"}, written before
+     * the shape ID was part of the scheme) are never pruned -- they carry no
+     * shape ID, so there is no way to tell which shape's edges to check.
+     *
+     * @param {string} [shapeId]  Restrict the sweep to one shape's keys.
+     *     Omit to sweep every shape in the store.
+     * @returns {Array<{key: string, joinery: Object}>} The removed entries,
+     *     in iteration order.  Empty when nothing was orphaned.
+     */
+    pruneOrphanedJoinery(shapeId = null) {
+        const ids = shapeId === null ? Array.from(this.shapes.keys()) : [shapeId];
+        const removed = [];
+
+        for (const id of ids) {
+            const prefix = `${id}:`;
+            const liveKeys = new Set(
+                this.getEdgesForShape(id).map(edge => EdgeSelection.keyFor(edge))
+            );
+
+            for (const [key, joinery] of this.edgeJoinery) {
+                if (!key.startsWith(prefix)) continue;
+                // Only the canonical three-part form is prunable; anything
+                // else under this prefix is a legacy key we cannot resolve.
+                const rest = key.slice(prefix.length);
+                if (rest.split(':').length !== 2) continue;
+                if (liveKeys.has(key)) continue;
+                removed.push({ key, joinery });
+            }
+        }
+
+        if (removed.length === 0) return removed;
+
+        removed.forEach(({ key }) => this.edgeJoinery.delete(key));
+        this.eventBus.emit(EVENTS.EDGE_JOINERY_CHANGED, { edge: null, joinery: null });
+        return removed;
+    }
+
+    /**
+     * Re-insert joinery entries captured by {@link #pruneOrphanedJoinery}.
+     *
+     * Keys are restored verbatim rather than recomputed from Edge objects,
+     * so an entry lands back on exactly the edge it came from once the
+     * geometry that owned it has been restored.
+     *
+     * @param {Array<{key: string, joinery: Object}>} entries  Entries as
+     *     returned by {@link #pruneOrphanedJoinery}.  Null/empty is a no-op.
+     */
+    restoreJoinery(entries) {
+        if (!entries || entries.length === 0) return;
+        entries.forEach(({ key, joinery }) => {
+            this.edgeJoinery.set(key, { ...joinery });
+        });
+        this.eventBus.emit(EVENTS.EDGE_JOINERY_CHANGED, { edge: null, joinery: null });
+    }
+
+    /**
      * Query whether a given edge is in the current edge selection.
      *
      * @param {import('../geometry/edge/index.js').Edge} edge  The edge to

@@ -24,13 +24,22 @@ export let PathKit = null;
  * @param {Function} [options.PathKitInit] - PathKit init function
  * @param {Function} [options.locateFile] - Locate wasm file
  * @param {*} [options.PathKit] - Already-initialized PathKit instance
+ * @param {boolean} [options.leakWatch=true] - Start the PkPath leak watchdog
+ *   once a real PathKit is available.  See {@link startPkLeakWatch}.
  * @returns {Promise<*>}
  */
 export const _initPathKit = async (options = {}) => {
     if (PathKit) return PathKit;
 
+    // The watchdog only makes sense once PkPaths can actually be allocated,
+    // so it is armed here rather than at module scope.
+    const armLeakWatch = () => {
+        if (options.leakWatch !== false) startPkLeakWatch();
+    };
+
     if (options.PathKit) {
         PathKit = options.PathKit;
+        armLeakWatch();
         return PathKit;
     }
 
@@ -41,11 +50,13 @@ export const _initPathKit = async (options = {}) => {
             : (file) => '/' + file;
         const maybeModule = await init({ locateFile: located });
         PathKit = typeof maybeModule.ready === 'function' ? await maybeModule.ready() : maybeModule;
+        armLeakWatch();
         return PathKit;
     }
 
     if (globalThis.PathKit) {
         PathKit = globalThis.PathKit;
+        armLeakWatch();
         return PathKit;
     }
 
@@ -210,11 +221,53 @@ export const fromPkCommands = (pkCommands, scale = 1) => {
 // =============================================================================
 
 let numPkObjects = 0;
-setInterval(() => {
-    if (numPkObjects !== 0) {
-        console.warn('PathKit memory leak', numPkObjects);
+let leakWatchTimer = null;
+
+/**
+ * Number of PkPath handles created but not yet deleted.  Every PkPath is a
+ * WASM allocation that must be released with {@link deletePkPath}; a count
+ * that stays above zero between operations means something leaked.
+ * @returns {number}
+ */
+export const getPkObjectCount = () => numPkObjects;
+
+/**
+ * Start the development-time watchdog that periodically warns when PkPath
+ * handles are still outstanding.
+ *
+ * This is NOT started at import time: a module-scope timer would keep the
+ * Node event loop alive for anything that merely imports geometry.  It is
+ * started by {@link _initPathKit} (i.e. only once a real PathKit is in play)
+ * and, where the host supports it (Node), the handle is unref'd so it never
+ * by itself prevents the process from exiting.
+ *
+ * Calling it twice is a no-op; the existing timer is kept.
+ *
+ * @param {number} [intervalMs=1000] - How often to check the handle count.
+ * @returns {Function} A function that stops the watchdog.
+ */
+export const startPkLeakWatch = (intervalMs = 1000) => {
+    if (leakWatchTimer) return stopPkLeakWatch;
+    leakWatchTimer = setInterval(() => {
+        if (numPkObjects !== 0) {
+            console.warn('PathKit memory leak', numPkObjects);
+        }
+    }, intervalMs);
+    // Node returns a Timeout object with unref(); browsers return a number.
+    if (typeof leakWatchTimer.unref === 'function') leakWatchTimer.unref();
+    return stopPkLeakWatch;
+};
+
+/**
+ * Stop the PkPath leak watchdog started by {@link startPkLeakWatch}.
+ * Safe to call when no watchdog is running.
+ */
+export const stopPkLeakWatch = () => {
+    if (leakWatchTimer) {
+        clearInterval(leakWatchTimer);
+        leakWatchTimer = null;
     }
-}, 1000);
+};
 
 export const emptyPkPath = () => {
     numPkObjects++;

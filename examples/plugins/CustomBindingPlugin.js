@@ -221,12 +221,22 @@ export class CustomBindingPlugin extends Plugin {
      * Start animation loop to update time-based bindings
      */
     startAnimationLoop(api) {
+        if (this._animationInterval) return; // already running
+
         // Use setInterval for regular updates that trigger re-render
         this._animationInterval = setInterval(() => {
             // Emit param changed to trigger re-render
             // This makes oscillate and time bindings animate
             api.emit('PARAM_CHANGED', { source: 'custom-bindings' });
         }, 50); // 20 FPS for smooth animation
+
+        // Under Node (tests, headless tooling) an interval keeps the event
+        // loop alive forever. The loop is a rendering nicety, never a reason
+        // to hold the process open, so unref it where the host supports it.
+        // Browsers return a plain number from setInterval and skip this.
+        if (typeof this._animationInterval.unref === 'function') {
+            this._animationInterval.unref();
+        }
     }
 
     /**
