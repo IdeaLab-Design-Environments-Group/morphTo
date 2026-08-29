@@ -7,6 +7,7 @@ export const TEST_MODULES = [
     './unit/serializer-roundtrip.test.js',
     './unit/shape-schema.test.js',
     './unit/canvas-stack.test.js',
+    './unit/canvas-interaction.test.js',
     './unit/commands.test.js',
     './unit/depth.test.js',
     './unit/editor-sync.test.js',
@@ -14,5 +15,9 @@ export const TEST_MODULES = [
     './unit/constraints.test.js',
     './unit/plugin-lifecycle.test.js',
     './unit/coach.test.js',
-    './unit/joinery.test.js'
+    './unit/joinery.test.js',
+    './unit/bindings.test.js',
+    './unit/shell-boot.test.js',
+    './unit/blocks-editor.test.js',
+    './unit/resource-hygiene.test.js'
 ];
