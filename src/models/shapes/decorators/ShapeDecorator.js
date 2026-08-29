@@ -62,12 +62,56 @@ export class ShapeDecorator {
         return this.wrappedShape.bindings;
     }
 
+    // Common schema properties. Read by the fabrication review (depth) and the
+    // canvas/hit-test transform (rotation), which both accept a decorated
+    // shape wherever a Shape is expected.
+    get depth() {
+        return this.wrappedShape.depth;
+    }
+
+    set depth(value) {
+        this.wrappedShape.depth = value;
+    }
+
+    get rotation() {
+        return this.wrappedShape.rotation;
+    }
+
+    set rotation(value) {
+        this.wrappedShape.rotation = value;
+    }
+
     getBindableProperties() {
         return this.wrappedShape.getBindableProperties();
     }
 
     getBounds() {
         return this.wrappedShape.getBounds();
+    }
+
+    /**
+     * Outline geometry of the wrapped shape. Decorations are paint-only, so
+     * they never alter the cut path — but this MUST be delegated: hit-testing,
+     * selection and both exporters (SVG, DXF) skip any shape without it, so a
+     * decorated shape would silently vanish from every export.
+     *
+     * @returns {import('../../../geometry/Path.js').Path}
+     */
+    toGeometryPath() {
+        return this.wrappedShape.toGeometryPath();
+    }
+
+    getPropertyDescriptor(property) {
+        return this.wrappedShape.getPropertyDescriptor(property);
+    }
+
+    translate(dx, dy) {
+        this.wrappedShape.translate(dx, dy);
+        return this;
+    }
+
+    toOptions() {
+        return this.wrappedShape.toOptions();
     }
 
     containsPoint(x, y) {

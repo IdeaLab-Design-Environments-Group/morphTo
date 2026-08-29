@@ -25,6 +25,7 @@ import { Wave } from './Wave.js';
 import { Slot } from './Slot.js';
 import { Arrow } from './Arrow.js';
 import { ChamferRectangle } from './ChamferRectangle.js';
+import { Text } from './Text.js';
 import { createBindingFromJSON } from '../BindingRegistry.js';
 import EventBus, { EVENTS } from '../../events/EventBus.js';
 
@@ -56,7 +57,7 @@ export class ShapeRegistry {
         [
             Circle, Line, Rectangle, PathShape, Polygon, Star, Triangle,
             Ellipse, Arc, RoundedRectangle, Donut, Cross, Gear, Spiral,
-            Wave, Slot, Arrow, ChamferRectangle
+            Wave, Slot, Arrow, ChamferRectangle, Text
         ].forEach(cls => this.registerClass(cls));
         this.#initialized = true;
     }
@@ -240,7 +241,12 @@ export class ShapeRegistry {
             const existingNumbers = [];
 
             allShapes.forEach(shape => {
-                if (shape.type === type) {
+                // Compare case-insensitively: `type` is the lowercased registry
+                // key, while shape.type is the class's own static type, which is
+                // camelCase for roundedRectangle/chamferRectangle. A strict
+                // compare never matched those, so after the counters reset (app
+                // reload, scene load) the next shape reused an existing ID.
+                if (String(shape.type).toLowerCase() === type) {
                     // Try to extract number from existing ID
                     const match = shape.id.match(new RegExp(`^${capitalizedType}\\s+(\\d+)$`, 'i'));
                     if (match) {

@@ -60,12 +60,17 @@ export class Wave extends Shape {
 
     getPoints(segments = 50) {
         const points = [];
-        const startX = this.centerX - this.width / 2;
-        
+        const width = Number(this.width) || 0;
+        const startX = this.centerX - width / 2;
+
         for (let i = 0; i <= segments; i++) {
-            const x = startX + (i / segments) * this.width;
-            const relX = x - this.centerX + this.width / 2;
-            const y = this.centerY + Math.sin((relX * this.frequency * Math.PI * 2) / this.width) * this.amplitude;
+            const x = startX + (i / segments) * width;
+            const relX = x - this.centerX + width / 2;
+            // A zero-width wave collapses to a point. Guard the division: an
+            // unguarded 0/0 makes every y NaN, which propagates into getBounds(),
+            // the scene extent the fabrication rules read, and the exported path.
+            const phase = width > 0 ? (relX * this.frequency * Math.PI * 2) / width : 0;
+            const y = this.centerY + Math.sin(phase) * this.amplitude;
             points.push({ x, y });
         }
 
