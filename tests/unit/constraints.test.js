@@ -9,6 +9,7 @@ import { ShapeRegistry } from '../../src/models/shapes/ShapeRegistry.js';
 import { CodeRunner } from '../../src/programming/CodeRunner.js';
 import { ConstraintController } from '../../src/constraints/ConstraintController.js';
 import { shapeCenter, createSceneAdapter } from '../../src/constraints/sceneAdapter.js';
+import { ConstraintsPass, glyphLabel, formatNum } from '../../src/views/canvas/passes/ConstraintsPass.js';
 
 function makeContext() {
     const tabManager = new TabManager();
@@ -164,4 +165,148 @@ test('an unknown constraint type is reported, not thrown', () => {
     const context = makeContext();
     const controller = new ConstraintController(context);
     assertEqual(controller.addConstraint({ type: 'parallel', a: {}, b: {} }), false);
+});
+
+/* ------------------------------------------------------------------ *
+ * The on-canvas glyphs (ConstraintsPass), ported from morphTo's
+ * constraintsOverlay.mjs.
+ * ------------------------------------------------------------------ */
+
+test('glyph labels match morphTo, one letter plus the distance', () => {
+    assertEqual(glyphLabel('coincident', {}), 'C');
+    assertEqual(glyphLabel('horizontal', {}), 'H');
+    assertEqual(glyphLabel('vertical', {}), 'V');
+    assertEqual(glyphLabel('distance', { dist: 100 }), 'D100');
+    assertEqual(glyphLabel('parallel', {}), 'P', 'unknown types fall back to an initial');
+    assertEqual(glyphLabel(undefined, {}), '?');
+});
+
+test('glyph numbers lose decimals as they grow', () => {
+    assertEqual(formatNum(0.25), '0.250');
+    assertEqual(formatNum(5.5), '5.50');
+    assertEqual(formatNum(42), '42.0');
+    assertEqual(formatNum(1234.6), '1235');
+    assertEqual(formatNum(-0.5), '-0.500', 'sign is kept');
+    assertEqual(formatNum(NaN), '?');
+});
+
+/** A recording 2D context sufficient for the glyph pass. */
+function makeGlyphCtx() {
+    const calls = [];
+    const state = { fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textBaseline: '' };
+    return new Proxy(state, {
+        get(t, prop) {
+            if (prop === 'calls') return calls;
+            if (prop in t) return t[prop];
+            if (prop === 'measureText') return (text) => ({ width: text.length * 7 });
+            return (...args) => calls.push({ op: String(prop), args, ...{ ...t } });
+        },
+        set(t, prop, value) { t[prop] = value; return true; }
+    });
+}
+
+function glyphFrame(ctx, constraints, geometry) {
+    return {
+        ctx,
+        viewport: { x: 100, y: 50, zoom: 2 },
+        vc: { worldToScreen: (x, y) => ({ x: x * 2 + 100, y: y * 2 + 50 }) }
+    };
+}
+
+test('a constraint draws one screen-sized badge at the anchors\' midpoint', () => {
+    const ctx = makeGlyphCtx();
+    const pass = new ConstraintsPass({
+        getConstraints: () => [{ id: 'c1', type: 'coincident' }],
+        getGeometry: () => ({ mid: { x: 10, y: 20 } })
+    });
+    pass.render(glyphFrame(ctx));
+
+    // The viewport transform is undone so the badge is laid out in CSS pixels.
+    assertEqual(pass.markers.length, 1);
+    const { bbox, scr } = pass.markers[0];
+    assertEqual(scr.x, 120, 'midpoint through worldToScreen');
+    assertEqual(scr.y, 90);
+    assertEqual(bbox.h, 18, 'fixed 18px badge height, not scaled by zoom');
+    assertEqual(bbox.w, 23, 'label width plus 8px padding either side');
+    assertEqual(bbox.x, scr.x - bbox.w / 2, 'centred on the midpoint');
+
+    // No connector line and no anchor dots: morphTo drew the badge alone.
+    const ops = ctx.calls.map(c => c.op);
+    assert(!ops.includes('arc'), 'no anchor markers');
+    assert(!ops.includes('lineTo'), 'no tie line');
+    assert(ops.includes('fill') && ops.includes('stroke') && ops.includes('fillText'));
+});
+
+test('a badge is bordered grey, lighter on hover and blue when selected', () => {
+    const geometry = () => ({ mid: { x: 0, y: 0 } });
+    const constraints = () => [{ id: 'c1', type: 'vertical' }];
+    const strokeOf = (source) => {
+        const ctx = makeGlyphCtx();
+        new ConstraintsPass(source).render(glyphFrame(ctx));
+        return ctx.calls.find(c => c.op === 'stroke');
+    };
+
+    const plain = strokeOf({ getConstraints: constraints, getGeometry: geometry });
+    assertEqual(plain.strokeStyle, '#444');
+    assertEqual(plain.lineWidth, 1);
+
+    const hovered = strokeOf({
+        getConstraints: constraints, getGeometry: geometry, getHoveredId: () => 'c1'
+    });
+    assertEqual(hovered.strokeStyle, '#888');
+    assertEqual(hovered.lineWidth, 1);
+
+    const selected = strokeOf({
+        getConstraints: constraints, getGeometry: geometry, getSelectedId: () => 'c1'
+    });
+    assertEqual(selected.strokeStyle, '#2a7fff');
+    assertEqual(selected.lineWidth, 2.5, 'the selected border is thicker');
+    assertEqual(selected.fillStyle, 'rgba(42,127,255,0.15)', 'and washed blue behind');
+});
+
+test('a constraint whose anchors have no finite midpoint is skipped', () => {
+    const ctx = makeGlyphCtx();
+    const pass = new ConstraintsPass({
+        getConstraints: () => [{ id: 'c1', type: 'coincident' }, { id: 'c2', type: 'vertical' }],
+        getGeometry: (c) => (c.id === 'c1' ? { mid: { x: NaN, y: 0 } } : { mid: { x: 5, y: 5 } })
+    });
+    pass.render(glyphFrame(ctx));
+    assertEqual(pass.markers.length, 1);
+    assertEqual(pass.markers[0].id, 'c2');
+});
+
+test('hit testing prefers the badge box, then a 12px radius, newest first', () => {
+    const pass = new ConstraintsPass({
+        getConstraints: () => [
+            { id: 'far', type: 'coincident' },
+            { id: 'near', type: 'coincident' }
+        ],
+        // Both badges sit 40px apart on screen.
+        getGeometry: (c) => ({ mid: { x: c.id === 'far' ? 0 : 20, y: 0 } })
+    });
+    pass.render(glyphFrame(pass.ctx = makeGlyphCtx()));
+    const [far, near] = pass.markers;
+
+    assertEqual(pass.hitTest(far.scr.x, far.scr.y), 'far', 'inside the first badge');
+    assertEqual(pass.hitTest(near.scr.x, near.scr.y), 'near');
+    // Just outside the 18px-tall box but inside the 12px fallback radius.
+    assertEqual(pass.hitTest(near.scr.x, near.scr.y + 11), 'near');
+    assertEqual(pass.hitTest(near.scr.x, near.scr.y + 13), null, 'beyond both');
+    assertEqual(pass.hitTest(-500, -500), null);
+});
+
+test('an empty constraint set draws nothing and clears the hit cache', () => {
+    const ctx = makeGlyphCtx();
+    const pass = new ConstraintsPass({ getConstraints: () => [], getGeometry: () => null });
+    pass.markers = [{ id: 'stale', scr: { x: 0, y: 0 }, bbox: { x: 0, y: 0, w: 1, h: 1 } }];
+    pass.render(glyphFrame(ctx));
+    assertEqual(pass.markers.length, 0);
+    assertEqual(ctx.calls.length, 0);
+    assertEqual(pass.hitTest(0, 0), null);
+});
+
+test('a null source leaves the pass inert', () => {
+    const pass = new ConstraintsPass(null);
+    pass.render(glyphFrame(makeGlyphCtx()));
+    assertEqual(pass.markers.length, 0);
 });

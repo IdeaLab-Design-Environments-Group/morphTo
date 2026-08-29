@@ -11,6 +11,12 @@
  * Solves go through the command history, which morphTo's original never did:
  * constraint solving is undoable here.
  *
+ * It also owns the constraints list panel. morphTo built that list in
+ * `src/constraints/ui.mjs` (`window.updateConstraintsMenu`); `renderList`
+ * below reproduces its markup exactly — an inline-styled flex row per
+ * constraint carrying the engine's label and a red '✕' delete button — and
+ * the container styling ui.mjs applied to the list element itself.
+ *
  * @module constraints/ConstraintController
  */
 
@@ -28,6 +34,31 @@ export class ConstraintController {
         this.onChanged = onChanged;
         this.adapter = createSceneAdapter(context, { onRedraw: () => this.onChanged?.() });
         this.engine = new ConstraintEngine(this.adapter, null, null);
+
+        /** @type {?string} Constraint glyph under the cursor. */
+        this.hoveredId = null;
+        /** @type {?string} Clicked constraint glyph. */
+        this.selectedId = null;
+
+        /** @type {?HTMLElement} The list panel, once attached. */
+        this.listContainer = null;
+        this.engine.onListChanged(() => this.renderList());
+        if (typeof document !== 'undefined') {
+            this.attachList(document.getElementById('constraints-list'));
+        }
+    }
+
+    /**
+     * What CanvasView's ConstraintsPass reads.
+     * @returns {Object} A constraint source for CanvasView.setConstraintSource.
+     */
+    canvasSource() {
+        return {
+            getConstraints: () => this.engine.getConstraintSnapshot(),
+            getGeometry: (c) => this.engine.getConstraintGeometry(c),
+            getHoveredId: () => this.hoveredId,
+            getSelectedId: () => this.selectedId
+        };
     }
 
     /** Re-read the shape store; call after shapes are added or removed. */
@@ -141,5 +172,82 @@ export class ConstraintController {
         }
         this.onChanged?.();
         return outcome;
+    }
+
+    /**
+     * Point the panel at its container and draw it.
+     *
+     * ui.mjs styled the list element itself rather than through a stylesheet
+     * (ui.mjs:151-157); those styles are reapplied here so the panel looks the
+     * same whether or not the host page carries a rule for it.
+     *
+     * @param {?HTMLElement} container - Typically `#constraints-list`.
+     */
+    attachList(container) {
+        this.listContainer = container || null;
+        if (!this.listContainer) return;
+        Object.assign(this.listContainer.style, {
+            maxHeight: '160px',
+            overflowY: 'auto',
+            border: '1px solid #ddd',
+            padding: '6px',
+            fontSize: '12px'
+        });
+        this.renderList();
+    }
+
+    /**
+     * Rebuild the constraint rows — morphTo's `window.updateConstraintsMenu`
+     * (ui.mjs:159-191), same elements, same inline styles, same '✕' button.
+     *
+     * @param {HTMLElement} [container] - Defaults to the attached container.
+     */
+    renderList(container = this.listContainer) {
+        if (!container) return;
+        container.innerHTML = '';
+
+        for (const def of this.list()) {
+            const item = document.createElement('div');
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+            item.style.margin = '2px 0';
+
+            const text = document.createElement('span');
+            text.textContent = def.label;
+
+            const rm = document.createElement('button');
+            rm.textContent = '✕';
+            rm.title = 'Delete constraint';
+            rm.style.border = 'none';
+            rm.style.background = 'none';
+            rm.style.cursor = 'pointer';
+            rm.style.color = '#c00';
+            rm.style.fontWeight = 'bold';
+            rm.addEventListener('click', () => this.remove(def.id));
+
+            item.appendChild(text);
+            item.appendChild(rm);
+            container.appendChild(item);
+        }
+    }
+
+    /**
+     * Open or close the panel — morphTo's `#constraints-button` handler
+     * (ui.mjs:210-219): opening rebuilds the anchor catalogue first, so the
+     * list reflects shapes added since it was last seen.
+     *
+     * @param {HTMLElement} panel - `#constraints-panel`.
+     * @returns {boolean} Whether the panel is now open.
+     */
+    togglePanel(panel) {
+        if (!panel) return false;
+        const open = panel.style.display !== 'block';
+        if (open) {
+            try { this.refresh(); } catch (_) { /* no shapes yet */ }
+            this.renderList();
+        }
+        panel.style.display = open ? 'block' : 'none';
+        return open;
     }
 }
