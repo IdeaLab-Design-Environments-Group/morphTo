@@ -1,6 +1,6 @@
 /**
  * Material-depth tests: depth as a bindable common property, paint/hit order,
- * migration semantics, and AQUI depth: flow.
+ * migration semantics, and Otto depth: flow.
  */
 import { test, assert, assertEqual, assertDeepEqual } from '../harness.js';
 import { ShapeRegistry } from '../../src/models/shapes/ShapeRegistry.js';
@@ -69,7 +69,7 @@ test('migrate: pre-2.0.0 per-shape thickness (geometry) is left untouched', () =
     assert(!('depth' in migrated.tabs[0].shapes[0]), 'no depth injected');
 });
 
-test('AQUI: depth: flows through as an ordinary shape param', () => {
+test('Otto: depth: flows through as an ordinary shape param', () => {
     ShapeRegistry.resetIdCounters();
     const scene = new SceneState();
     const runner = new CodeRunner({ shapeStore: scene.shapeStore, parameterStore: scene.parameterStore });
@@ -78,7 +78,7 @@ test('AQUI: depth: flows through as an ordinary shape param', () => {
     assertEqual(scene.shapeStore.getAll()[0].depth, 3);
 });
 
-test('AQUI: a z: param no longer lands on the shape', () => {
+test('Otto: a z: param no longer lands on the shape', () => {
     ShapeRegistry.resetIdCounters();
     const scene = new SceneState();
     const runner = new CodeRunner({ shapeStore: scene.shapeStore, parameterStore: scene.parameterStore });
@@ -87,11 +87,11 @@ test('AQUI: a z: param no longer lands on the shape', () => {
     assertEqual(scene.shapeStore.getAll()[0].z, undefined);
 });
 
-test('AQUI: depth referencing a param evaluates at creation', () => {
+test('Otto: depth referencing a param evaluates at creation', () => {
     ShapeRegistry.resetIdCounters();
     const scene = new SceneState();
     const runner = new CodeRunner({ shapeStore: scene.shapeStore, parameterStore: scene.parameterStore });
-    // AQUI params use `param <name> <value>` (no `=`).
+    // Otto params use `param <name> <value>` (no `=`).
     const result = runner.run('param t 4\nshape circle c1 { radius: 20 depth: t }', { clearExisting: true });
     assert(result.success, result.error);
     assertEqual(Number(scene.shapeStore.getAll()[0].depth), 4);

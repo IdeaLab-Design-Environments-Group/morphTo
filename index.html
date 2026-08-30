@@ -49,45 +49,11 @@
       padding: 0;
     }
     
-    .docs-redirect {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      padding: 40px;
-      text-align: center;
-    }
-    
-    .docs-redirect h1 {
-      font-size: 2.5em;
-      margin-bottom: 20px;
-      color: #333;
-    }
-    
-    .docs-redirect p {
-      font-size: 1.2em;
-      margin-bottom: 30px;
-      color: #666;
-      max-width: 600px;
-    }
-    
-    .docs-link {
-      display: inline-block;
-      padding: 15px 40px;
-      background-color: #4CAF50;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-      font-size: 1.1em;
-      font-weight: bold;
-      transition: background-color 0.3s;
-    }
-    
-    .docs-link:hover {
-      background-color: #45a049;
-    }
-    
+        
+        
+        
+        
+        
     .github-icon {
       margin-right: 8px;
     }
@@ -580,15 +546,40 @@
       background: white;
     }
     
+    /* The editor tab owns the space under the header. Laying it out as a
+       column gives .main-content a definite height, without which the
+       CodeMirror pane's height:100% falls back to auto, grows with the
+       document and scrolls the whole page. */
+    #editor-tab.active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    #editor-tab .main-content {
+      min-height: 0;
+    }
+    
+    #editor-tab .footer {
+      flex: none;
+    }
+    
     /* Fix editor layout proportions */
     .editor-panel {
       width: 25% !important;
+      min-height: 0;
+      overflow: hidden;
+    }
+    
+    #text-editor-container,
+    #blockly-editor-container {
+      min-height: 0;
+      overflow: hidden;
     }
     
     .visualization-panel {
       width: 75% !important;
-      height: calc(100vh - 96px) !important;
-      aspect-ratio: 4/3;
+      height: auto !important;
     }
     
     #canvas {
@@ -608,7 +599,6 @@
     <div class="tabs editor-tabs" style="display: none;">
       <button class="tab-btn" data-tab="editor-tab">Otto</button>
       <button class="tab-btn" data-tab="tutorials-tab">Tutorials</button>
-      <button class="tab-btn" data-tab="docs-tab">Docs</button>
     </div>
   </div>
 
@@ -637,6 +627,11 @@
       
       <div class="examples-section">
         <div class="examples-grid">
+          <!-- The one free-form 3D example: a profile stack, not a flat cut -->
+          <div class="example-card" data-example="puffin">
+            <h3>Puffin</h3>
+            <img src="./Images/puffin.png" alt="Puffin" />
+          </div>
           <div class="example-card" data-example="satsuma">
             <h3>Satsuma</h3>
             <img src="./Images/satsuma.png" alt="Satsuma" />
@@ -730,7 +725,14 @@
       <div class="editor-panel">
         <div class="editor-top" style="padding:8px; border-bottom:1px solid #ccc;">
           <div class="editor-top-row">
-            <button id="toggle-editor-mode" class="button">Blocks</button>
+            <div class="editor-modes" id="editor-modes" role="tablist" aria-label="Editor mode">
+              <button type="button" class="editor-mode active" id="mode-code"
+                      data-mode="code" role="tab" aria-selected="true">Code</button>
+              <button type="button" class="editor-mode" id="mode-blocks"
+                      data-mode="blocks" role="tab" aria-selected="false">Blocks</button>
+              <button type="button" class="editor-mode" id="mode-shapes"
+                      data-mode="shapes" role="tab" aria-selected="false">Shapes</button>
+            </div>
             <div class="doc-tabs" id="doc-tabs"></div>
             <button id="doc-new" class="doc-tab-add" title="New tab" type="button">+</button>
           </div>
@@ -744,33 +746,17 @@
         <div id="blockly-editor-container" style="flex:1; display:none;">
           <div id="blocklyDiv" style="height:100%; width:100%;"></div>
         </div>
+
+        <!-- Third editor mode. ShapeLibrary renders into
+             #shape-library-container, which keeps its id so the engine's
+             element map is unchanged. -->
+        <div id="shape-palette-pane" style="flex:1; display:none;">
+          <div class="palette-content" id="shape-library-container"></div>
+        </div>
       </div>
       
       <div class="visualization-panel">
         <canvas id="canvas"></canvas>
-
-        <!-- Grid toggle (top-left) and shape palette toggle (top-right) -->
-        <button class="grid-toggle-button" id="grid-toggle-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="5" cy="5" r="1" fill="currentColor"/>
-            <circle cx="12" cy="5" r="1" fill="currentColor"/>
-            <circle cx="19" cy="5" r="1" fill="currentColor"/>
-            <circle cx="5" cy="12" r="1" fill="currentColor"/>
-            <circle cx="12" cy="12" r="1" fill="currentColor"/>
-            <circle cx="19" cy="12" r="1" fill="currentColor"/>
-            <circle cx="5" cy="19" r="1" fill="currentColor"/>
-            <circle cx="12" cy="19" r="1" fill="currentColor"/>
-            <circle cx="19" cy="19" r="1" fill="currentColor"/>
-          </svg>
-        </button>
-        <button class="palette-toggle-button" id="palette-toggle" title="Toggle Shape Palette">⊞</button>
-        <div class="shape-palette-container" id="shape-palette">
-          <div class="palette-header">
-            <h3>Shape Palette</h3>
-            <button class="close-palette" id="palette-close" type="button">×</button>
-          </div>
-          <div class="palette-content" id="shape-library-container"></div>
-        </div>
 
         <!-- Inspector popup: Properties above Parameters, toggled from the footer -->
         <div class="parameters-container" id="inspector-panel">
@@ -778,13 +764,29 @@
           <div id="parameters-menu-container"></div>
         </div>
 
-        <!-- Constraint builder over the list of active constraints -->
+        <!-- Constraint builder over the list of active constraints.
+             ConstraintController.renderBuilder inserts #constraints-builder
+             between the header and the list section. -->
         <div id="constraints-panel">
-          <div style="font-weight:bold; margin-top:10px;">Active Constraints</div>
-          <div id="constraints-list"></div>
+          <div class="constraints-header">
+            <h3 class="constraints-title">Constraints</h3>
+            <button type="button" class="constraints-close" id="constraints-close"
+                    title="Close" aria-label="Close constraints">&times;</button>
+          </div>
+          <section class="constraint-section constraint-section--list" id="constraints-active">
+            <h4 class="constraint-section__title">Active Constraints</h4>
+            <div id="constraints-list" class="constraints-list"></div>
+          </section>
         </div>
 
         <div class="zoom-controls-container" id="zoom-controls-container"></div>
+
+        <!-- 3D form preview. Overlays the 2D canvas in the same work area and
+             starts hidden; Viewport3D (src/views/viewport3d/) owns this canvas
+             and appends its own fold-label legend beside it. -->
+        <div class="viewport3d-panel" id="viewport3d-panel" style="display: none;">
+          <canvas id="viewport3d-canvas"></canvas>
+        </div>
 
         <div class="keyboardShortcuts">
           <strong>Keyboard Shortcuts:</strong> Delete to remove • Arrow keys to move • R to rotate • ; to toggle grid • Scroll to pan • Ctrl/⌘ + scroll to zoom
@@ -814,6 +816,7 @@
         <div class="export-menu" id="export-menu">
           <button class="export-option" id="export-svg">Export SVG</button>
           <button class="export-option" id="export-dxf">Export DXF</button>
+          <button class="export-option" id="export-stl">Export STL</button>
         </div>
       </div>
     </div>
@@ -826,19 +829,6 @@
       <div class="tutorials-grid"></div>
     </div>
   </div>
-
-  <!-- Documentation Tab - Now redirects to GitHub -->
-  <div class="tab-content" id="docs-tab">
-    <div class="docs-redirect">
-      <h1>📚 Otto Documentation</h1>
-      <p>The complete Otto documentation is hosted on GitHub. Click the button below to access tutorials, API references, and guides.</p>
-      <a href="https://github.com/HisarCS/Otto/tree/main/Docs" target="_blank" rel="noopener noreferrer" class="docs-link">
-        <span class="github-icon">📖</span>
-        View Documentation on GitHub
-      </a>
-    </div>
-  </div>
-
 
   <script>
     // CRITICAL: Verify Vatti Clipping library is loaded

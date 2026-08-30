@@ -24,7 +24,7 @@ export class CoachPanel extends Component {
      * @param {import('../core/SceneContext.js').SceneContext} context
      *   Live accessor for the active tab's shapeStore / parameterStore.
      * @param {Object} [opts]
-     * @param {() => string} [opts.getCode]  Returns the current AQUI source, if any.
+     * @param {() => string} [opts.getCode]  Returns the current Otto source, if any.
      * @param {HTMLElement} [opts.button]  The toolbar button that toggles the flyover.
      */
     constructor(context, { getCode = () => '', button = null } = {}) {

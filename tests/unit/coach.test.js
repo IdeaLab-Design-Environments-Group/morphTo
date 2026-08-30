@@ -69,7 +69,7 @@ test('an expression binding is annotated by its expression', () => {
     assertEqual(summary.shapes[0].props.radius.boundTo, '= w * 2');
 });
 
-test('sceneSummaryToText includes params, shapes, and AQUI code', () => {
+test('sceneSummaryToText includes params, shapes, and Otto code', () => {
     const param = new Parameter('p1', 'r', 25, 0, 100, 0);
     const circle = ShapeRegistry.create('circle', { x: 0, y: 0 }, { radius: 25 });
     circle.setBinding('radius', new ParameterBinding('p1'));
@@ -80,7 +80,7 @@ test('sceneSummaryToText includes params, shapes, and AQUI code', () => {
     assert(text.includes('Units: mm'), 'declares units');
     assert(text.includes('r = 25 [0..100]'), 'shows parameter with range');
     assert(text.includes('radius=25 (= r)'), 'shows bound property');
-    assert(text.includes('AQUI source:'), 'includes code section');
+    assert(text.includes('Otto source:'), 'includes code section');
 });
 
 // ---- parseFindings --------------------------------------------------------

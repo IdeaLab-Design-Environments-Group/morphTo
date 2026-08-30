@@ -6,7 +6,7 @@
  * to solve them; morphTo has a Newton–Raphson solver with forward-mode
  * autodiff (src/math) that only ever ran against canvas interactions. This
  * controller feeds the language's constraints into that solver, so a
- * constraints block written in AQUI now actually moves geometry.
+ * constraints block written in Otto now actually moves geometry.
  *
  * Solves go through the command history, which morphTo's original never did:
  * constraint solving is undoable here.
@@ -27,39 +27,58 @@ import { createSceneAdapter } from './sceneAdapter.js';
 import { MutateShapesCommand } from '../commands/shapeCommands.js';
 
 /**
- * The builder's DOM helpers, lifted from morphTo's `src/constraints/ui.mjs`
- * (lines 14-20) unchanged: it styled every control inline rather than through
- * the stylesheet, and the popup only looks right if that is preserved.
+ * The builder's DOM helpers.
+ *
+ * These carried morphTo's inline styles (`src/constraints/ui.mjs`, lines
+ * 14-20) -- every control sized and spaced by a `style.*` assignment. That is
+ * why the panel never looked like the rest of Otto: inline styles beat the
+ * stylesheet, so the panel could not inherit the chrome. The styling now
+ * lives in `styles.css` under `#constraints-panel`, and these helpers emit
+ * classes.
+ *
+ * The four selects in a section were also unlabelled -- two rows of anonymous
+ * dropdowns with nothing saying which was a shape and which an anchor. Each
+ * is now a captioned field.
  */
 const clearEl = (el) => { while (el.firstChild) el.removeChild(el.firstChild); };
-const label = (text, marginTop = '10px') => {
-    const d = document.createElement('div');
-    d.textContent = text; d.style.fontWeight = 'bold'; d.style.marginTop = marginTop;
-    return d;
+
+const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
 };
-const hr = () => { const h = document.createElement('hr'); h.style.margin = '10px 0'; return h; };
-const row2 = (a, b) => {
-    const w = document.createElement('div');
-    w.style.display = 'grid'; w.style.gridTemplateColumns = '1fr 1fr'; w.style.gap = '8px';
-    w.appendChild(a); w.appendChild(b);
-    return w;
+
+/** A section heading. */
+const sectionTitle = (text) => el('h4', 'constraint-section__title', text);
+
+/** A control with its caption, so every select says what it selects. */
+const field = (caption, control) => {
+    const wrap = el('label', 'constraint-field');
+    wrap.appendChild(el('span', 'constraint-field__label', caption));
+    control.className = 'constraint-control';
+    control.setAttribute('aria-label', caption);
+    wrap.appendChild(control);
+    return wrap;
 };
-const btnFull = (text) => {
-    const b = document.createElement('button');
-    b.className = 'button'; b.textContent = text;
-    b.style.width = '100%'; b.style.marginTop = '6px';
-    return b;
+
+/** The 2x2 grid of captioned fields a section is built from. */
+const fieldGrid = (fields) => {
+    const grid = el('div', 'constraint-grid');
+    for (const f of fields) grid.appendChild(f);
+    return grid;
 };
+
+const btnFull = (text) => el('button', 'constraint-action', text);
+
 const inputNum = () => {
     const i = document.createElement('input');
-    i.type = 'number'; i.step = 'any'; i.style.width = '100%'; i.style.margin = '6px 0 8px';
+    i.type = 'number';
+    i.step = 'any';
     return i;
 };
-const sel = () => {
-    const s = document.createElement('select');
-    s.style.width = '100%'; s.style.margin = '6px 0 8px';
-    return s;
-};
+
+const sel = () => document.createElement('select');
 
 /** ui.mjs alerted on an unusable pair; headless callers have no `alert`. */
 const warn = (message) => {
@@ -228,24 +247,24 @@ export class ConstraintController {
     /**
      * Point the panel at its container and draw it.
      *
-     * ui.mjs styled the list element itself rather than through a stylesheet
-     * (ui.mjs:151-157); those styles are reapplied here so the panel looks the
-     * same whether or not the host page carries a rule for it. The builder
-     * that stood above that list in ui.mjs is raised into the same panel.
+     * The list element used to be styled inline here (ui.mjs:151-157 did the
+     * same), which is what drew the bordered empty box under the heading and
+     * what stopped the stylesheet from having any say. The look lives in
+     * `styles.css` under `.constraints-list` now.
+     *
+     * The builder goes into the PANEL, not into the list's immediate parent:
+     * the list sits inside its own `#constraints-active` section, so a
+     * parentElement lookup would nest the builder inside the very section it
+     * is supposed to sit above.
      *
      * @param {?HTMLElement} container - Typically `#constraints-list`.
      */
     attachList(container) {
         this.listContainer = container || null;
         if (!this.listContainer) return;
-        this.renderBuilder(this.listContainer.parentElement);
-        Object.assign(this.listContainer.style, {
-            maxHeight: '160px',
-            overflowY: 'auto',
-            border: '1px solid #ddd',
-            padding: '6px',
-            fontSize: '12px'
-        });
+        const panel = this.listContainer.closest?.('#constraints-panel')
+            ?? this.listContainer.parentElement;
+        this.renderBuilder(panel);
         this.renderList();
     }
 
@@ -274,16 +293,31 @@ export class ConstraintController {
         /** @type {Array<{shapes: HTMLSelectElement[], anchors: HTMLSelectElement[]}>} */
         this.builderSections = [];
 
-        /** One section: two shape selects, two anchor selects, wired together. */
+        /**
+         * One section: a titled block holding two shape selects and two anchor
+         * selects, wired so changing a shape refills its anchor list.
+         *
+         * Returns the select bundle AND the block, because the action buttons
+         * belong inside the section they act on rather than loose after it --
+         * that is what lets a rule separate the sections instead of an <hr>.
+         */
         const section = (title) => {
+            const block = el('section', 'constraint-section');
             const shapeA = sel(), shapeB = sel();
             const anchorA = sel(), anchorB = sel();
             shapeA.addEventListener('change', () => this.fillAnchors(anchorA, shapeA.value));
             shapeB.addEventListener('change', () => this.fillAnchors(anchorB, shapeB.value));
-            root.appendChild(label(title));
-            root.appendChild(row2(shapeA, shapeB));
-            root.appendChild(row2(anchorA, anchorB));
-            const part = { shapes: [shapeA, shapeB], anchors: [anchorA, anchorB] };
+
+            block.appendChild(sectionTitle(title));
+            block.appendChild(fieldGrid([
+                field('Shape A', shapeA),
+                field('Shape B', shapeB),
+                field('Anchor A', anchorA),
+                field('Anchor B', anchorB)
+            ]));
+            root.appendChild(block);
+
+            const part = { shapes: [shapeA, shapeB], anchors: [anchorA, anchorB], block };
             this.builderSections.push(part);
             return part;
         };
@@ -297,6 +331,13 @@ export class ConstraintController {
             ];
         };
 
+        /** The row an action button sits on, inside its own section. */
+        const actions = (block, ...buttons) => {
+            const row = el('div', 'constraint-actions');
+            for (const button of buttons) row.appendChild(button);
+            block.appendChild(row);
+        };
+
         const coincident = section('Coincident');
         const coincidentBtn = btnFull('Make Anchors Coincident');
         coincidentBtn.addEventListener('click', () => {
@@ -306,13 +347,12 @@ export class ConstraintController {
             if (a.shape === b.shape && a.anchor === b.anchor) { warn('Pick different anchors.'); return; }
             this.createConstraint({ type: 'coincident', a, b });
         });
-        root.appendChild(coincidentBtn);
-        root.appendChild(hr());
+        actions(coincident.block, coincidentBtn);
 
         const dist = section('Distance');
         const distValue = inputNum();
-        distValue.placeholder = 'Distance (e.g., 100)';
-        root.appendChild(distValue);
+        distValue.placeholder = 'e.g. 100';
+        dist.block.appendChild(field('Separation (mm)', distValue));
         const distBtn = btnFull('Apply Distance');
         distBtn.addEventListener('click', () => {
             const ends = pair(dist);
@@ -321,8 +361,7 @@ export class ConstraintController {
             if (!Number.isFinite(d) || d < 0) { warn('Enter a non-negative distance.'); return; }
             this.createConstraint({ type: 'distance', a: ends[0], b: ends[1], dist: d });
         });
-        root.appendChild(distBtn);
-        root.appendChild(hr());
+        actions(dist.block, distBtn);
 
         const axis = section('Horizontal / Vertical');
         const horizontalBtn = btnFull('Make Horizontal');
@@ -335,10 +374,12 @@ export class ConstraintController {
             const ends = pair(axis);
             if (ends) this.createConstraint({ type: 'vertical', a: ends[0], b: ends[1] });
         });
-        root.appendChild(row2(horizontalBtn, verticalBtn));
-        root.appendChild(hr());
+        actions(axis.block, horizontalBtn, verticalBtn);
 
-        panel.insertBefore(root, panel.firstChild);
+        // Above the Active Constraints list, below the panel header. Inserting
+        // at panel.firstChild would put the builder above the title.
+        const list = panel.querySelector?.('#constraints-active');
+        panel.insertBefore(root, list ?? panel.firstChild);
         this.builderContainer = root;
         this.refreshBuilder();
     }
@@ -417,8 +458,10 @@ export class ConstraintController {
     }
 
     /**
-     * Rebuild the constraint rows — morphTo's `window.updateConstraintsMenu`
-     * (ui.mjs:159-191), same elements, same inline styles, same '✕' button.
+     * Rebuild the constraint rows.
+     *
+     * An empty list used to render as an empty box, which reads as broken
+     * rather than as "nothing here yet"; it now says so.
      *
      * @param {HTMLElement} [container] - Defaults to the attached container.
      */
@@ -426,27 +469,22 @@ export class ConstraintController {
         if (!container) return;
         container.innerHTML = '';
 
-        for (const def of this.list()) {
-            const item = document.createElement('div');
-            item.style.display = 'flex';
-            item.style.justifyContent = 'space-between';
-            item.style.alignItems = 'center';
-            item.style.margin = '2px 0';
+        const defs = this.list();
+        if (defs.length === 0) {
+            container.appendChild(el('div', 'constraints-empty', 'No constraints yet.'));
+            return;
+        }
 
-            const text = document.createElement('span');
-            text.textContent = def.label;
+        for (const def of defs) {
+            const item = el('div', 'constraint-row');
+            item.appendChild(el('span', 'constraint-row__label', def.label));
 
-            const rm = document.createElement('button');
-            rm.textContent = '✕';
+            const rm = el('button', 'constraint-row__remove', '\u00d7');
+            rm.type = 'button';
             rm.title = 'Delete constraint';
-            rm.style.border = 'none';
-            rm.style.background = 'none';
-            rm.style.cursor = 'pointer';
-            rm.style.color = '#c00';
-            rm.style.fontWeight = 'bold';
+            rm.setAttribute('aria-label', `Delete ${def.label}`);
             rm.addEventListener('click', () => this.remove(def.id));
 
-            item.appendChild(text);
             item.appendChild(rm);
             container.appendChild(item);
         }

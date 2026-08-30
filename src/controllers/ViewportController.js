@@ -53,8 +53,9 @@ export class ViewportController {
         this.baseZoom = 1;
 
         /**
-         * The first resize initializes the viewport zoom to baseZoom; later
-         * resizes keep whatever zoom the user has chosen.
+         * Whether a real (non-zero) canvas size has initialized the viewport.
+         * The first such resize sets zoom to baseZoom and centres the origin;
+         * later resizes keep whatever pan and zoom the user has chosen.
          * @type {boolean}
          */
         this.hasInitializedZoom = false;
@@ -97,19 +98,27 @@ export class ViewportController {
         this.cssWidth = cssWidth;
         this.cssHeight = cssHeight;
         this.baseZoom = 1;
-        if (!this.hasInitializedZoom) {
-            this.viewport.zoom = this.baseZoom;
-            // Put the world origin in the middle of the canvas rather than in
-            // its top-left corner, so a shape at (0,0) — and anything with
-            // negative coordinates — is on screen to begin with. Only for an
-            // untouched viewport: a pan, or one restored from a saved scene,
-            // is the user's and must survive a resize.
-            if (this.viewport.x === 0 && this.viewport.y === 0) {
-                this.viewport.x = cssWidth / 2;
-                this.viewport.y = cssHeight / 2;
-            }
-            this.hasInitializedZoom = true;
+        if (this.hasInitializedZoom) return;
+
+        // A canvas that the browser has not laid out yet measures 0x0, and the
+        // FIRST call always arrives in that state. Centring on it puts the
+        // origin at (0, 0) -- the top-left corner -- and, far worse, latches
+        // hasInitializedZoom, so the real size that arrives a frame later is
+        // skipped and the origin stays in the corner for the whole session.
+        // Initialization waits for a size that actually exists.
+        if (!(cssWidth > 0) || !(cssHeight > 0)) return;
+
+        this.viewport.zoom = this.baseZoom;
+        // Put the world origin in the middle of the canvas rather than in its
+        // top-left corner, so a shape at (0,0) -- and anything with negative
+        // coordinates -- is on screen to begin with. Only for an untouched
+        // viewport: a pan, or one restored from a saved scene, is the user's
+        // and must survive a resize.
+        if (this.viewport.x === 0 && this.viewport.y === 0) {
+            this.viewport.x = cssWidth / 2;
+            this.viewport.y = cssHeight / 2;
         }
+        this.hasInitializedZoom = true;
     }
 
     /**

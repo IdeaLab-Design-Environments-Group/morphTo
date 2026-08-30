@@ -17,7 +17,7 @@
  * See tests/mini-dom.js for the DOM this runs on and tests/morphto-boot.js for
  * the boot + CDN stubs.
  */
-import { test, assert, assertEqual } from '../harness.js';
+import { test, assert, assertEqual, assertDeepEqual } from '../harness.js';
 import { bootMorphTo, pressKey, IS_NODE } from '../morphto-boot.js';
 import { MiniEvent } from '../mini-dom.js';
 import { MORPHTO_ELEMENT_IDS } from '../../src/shell/MorphToShell.js';
@@ -49,6 +49,27 @@ test('main.js boots the engine into index.html without throwing', async () => {
         assert(h.app, 'window.morphTo.app exists');
         assert(h.shell, 'window.morphTo.shell exists');
         assert(h.autoSaveStarted, 'init() started autosave');
+    });
+});
+
+test('boot survives DOMContentLoaded having already fired', async () => {
+    await onPage((h) => {
+        // The boot harness dispatches DOMContentLoaded BEFORE importing
+        // main.js, which is the ordering a real browser produces here: with a
+        // module graph this wide the parser finishes and the event fires while
+        // the graph is still resolving, so the module evaluates a few
+        // milliseconds too late to catch it.
+        //
+        // Gating boot on that listener alone is silent and total. Nothing
+        // throws -- the listener is registered, it simply never runs. The page
+        // still looks half-alive, because the landing page, the tab strip and
+        // the shortcut bar are wired by classic scripts that are unaffected;
+        // what is missing is the whole engine. No CanvasView means the canvas
+        // keeps its untouched 300x150 backing store and paints nothing, so the
+        // work area shows bare CSS.
+        assertEqual(h.doc.readyState, 'interactive', 'the event was already past');
+        assert(h.app, 'the engine booted anyway');
+        assert(h.app.canvasView, 'the canvas stack was constructed');
     });
 });
 
@@ -162,57 +183,68 @@ test('Parameters and Constraints buttons toggle their popups', async () => {
     });
 });
 
-test('grid toggle and the `;` shortcut drive the same interaction flag', async () => {
+test('`;` is the grid toggle, and there is no button left to drift from it', async () => {
     await onPage((h, id) => {
-        const button = id('grid-toggle-btn');
+        // The toolbar button used to own this flag and the shortcut clicked it
+        // to stay in sync. The button is gone -- it sat on the origin and
+        // covered the drawing -- so the shortcut flips the flag itself.
+        assertEqual(h.doc.getElementById('grid-toggle-btn'), null, 'no grid button in the DOM');
+
         const initial = h.app.interaction.showGrid;
-        assertEqual(button.classList.contains('active'), Boolean(initial), 'button starts in sync');
-
-        button.click();
-        assertEqual(h.app.interaction.showGrid, !initial, 'click flipped the flag');
-        assertEqual(button.classList.contains('active'), !initial, 'and the button');
-
-        // ';' routes through the button so its state cannot drift.
         pressKey(h.doc, ';');
-        assertEqual(h.app.interaction.showGrid, initial, 'the shortcut flipped it back');
-        assertEqual(button.classList.contains('active'), Boolean(initial), 'button followed');
+        assertEqual(h.app.interaction.showGrid, !initial, 'the shortcut flipped the flag');
+        pressKey(h.doc, ';');
+        assertEqual(h.app.interaction.showGrid, initial, 'and flipped it back');
     });
 });
 
-test('shape palette toggle and close control the floating panel', async () => {
+test('the shape palette is an editor pane, not an overlay on the canvas', async () => {
     await onPage((h, id) => {
-        const palette = id('shape-palette');
-        assert(!palette.classList.contains('visible'), 'starts hidden');
-        id('palette-toggle').click();
-        assert(palette.classList.contains('visible'), 'toggle opened it');
-        id('palette-close').click();
-        assert(!palette.classList.contains('visible'), 'close dismissed it');
+        // It used to be a floating panel with its own toggle and close button
+        // sitting over the drawing. It is now the third editor mode, so it
+        // lives in the editor panel and is reached the same way the other two
+        // are.
+        assertEqual(h.doc.getElementById('palette-toggle'), null, 'no canvas toggle left');
+        assertEqual(h.doc.getElementById('shape-palette'), null, 'no floating panel left');
+
+        const pane = id('shape-palette-pane');
+        assert(pane, 'the shapes pane exists');
+        assert(id('shape-library-container').closest('#shape-palette-pane') === pane,
+            'the library renders inside the pane');
         assert(id('shape-library-container').querySelectorAll('.palette-item').length > 0,
-            'the library rendered its shapes inside the palette');
+            'and it rendered its shapes');
     });
 });
 
-test('editor-mode toggle swaps panes and moves editing authority with them', async () => {
+test('the mode control shows exactly one pane and moves authority with it', async () => {
     await onPage((h, id) => {
-        const button = id('toggle-editor-mode');
-        const text = id('text-editor-container');
-        const blocks = id('blockly-editor-container');
+        const panes = {
+            code: id('text-editor-container'),
+            blocks: id('blockly-editor-container'),
+            shapes: id('shape-palette-pane')
+        };
+        const shown = () => Object.entries(panes)
+            .filter(([, pane]) => pane.style.display !== 'none')
+            .map(([name]) => name);
 
-        assertEqual(blocks.style.display, 'none', 'blocks pane starts hidden');
+        assertDeepEqual(shown(), ['code'], 'code is the starting mode');
         assertEqual(h.app.isBlocksEditorActive(), false,
             'a hidden workspace must not speak for the source');
 
-        button.click();
-        assertEqual(blocks.style.display, 'flex', 'blocks shown');
-        assertEqual(text.style.display, 'none', 'text hidden');
-        assertEqual(button.textContent, 'Text', 'button offers the way back');
-        assertEqual(h.app.isBlocksEditorActive(), true, 'blocks now authoritative');
+        for (const mode of ['blocks', 'shapes', 'code', 'shapes', 'blocks']) {
+            id(`mode-${mode}`).click();
+            assertDeepEqual(shown(), [mode], `${mode} is the only pane shown`);
+            assertEqual(id(`mode-${mode}`).classList.contains('active'), true,
+                `the ${mode} segment is marked active`);
+            assertEqual(id(`mode-${mode}`).getAttribute('aria-selected'), 'true',
+                `and announced as selected`);
+            // Authority follows visibility, in BOTH directions -- leaving
+            // blocks for shapes has to surrender it just as leaving for code does.
+            assertEqual(h.app.isBlocksEditorActive(), mode === 'blocks',
+                `blocks speaks for the source only in blocks mode (was ${mode})`);
+        }
 
-        button.click();
-        assertEqual(blocks.style.display, 'none');
-        assertEqual(text.style.display, 'flex');
-        assertEqual(button.textContent, 'Blocks');
-        assertEqual(h.app.isBlocksEditorActive(), false);
+        id('mode-code').click();   // back to code for later tests
     });
 });
 
@@ -233,7 +265,7 @@ test('switching to blocks rebuilds the workspace before it becomes authoritative
             return real(code);
         };
         try {
-            id('toggle-editor-mode').click();
+            id('mode-blocks').click();
         } finally {
             h.app.blocksEditor.syncFromCode = real;
         }
@@ -242,7 +274,7 @@ test('switching to blocks rebuilds the workspace before it becomes authoritative
         assertEqual(synced[0].code, source, 'from the current editor contents');
         assertEqual(synced[0].blocksVisible, false, 'while blocks -> code writes are still dropped');
 
-        id('toggle-editor-mode').click(); // back to text for later tests
+        id('mode-code').click(); // back to code for later tests
     });
 });
 
@@ -263,7 +295,7 @@ test('the doc-tab strip: "+" adds a tab, activates it, and re-renders', async ()
 test('export menu opens, dispatches to its exporter, and closes on an outside click', async () => {
     await onPage((h, id) => {
         const menu = id('export-menu');
-        assertDeepIds(h.shell.exporters, ['export-svg', 'export-dxf']);
+        assertDeepIds(h.shell.exporters, ['export-svg', 'export-dxf', 'export-stl']);
 
         id('export-button').click();
         assert(menu.classList.contains('visible'), 'button opened the menu (and stopped propagation)');
@@ -289,6 +321,21 @@ test('export menu opens, dispatches to its exporter, and closes on an outside cl
         h.doc.body.click();
         assert(!menu.classList.contains('visible'), 'an outside click dismissed it');
     });
+});
+
+test('the class the export menu toggles is the class the stylesheet reveals', async () => {
+    // Every assertion above passed for a menu that never appeared on screen:
+    // the shell toggles `.visible`, the stylesheet only had a rule for
+    // `.export-menu.show`, and a mini-DOM applies no CSS so nothing noticed.
+    // This is the seam, checked directly.
+    if (!IS_NODE) return;
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+
+    const hidden = /\.export-menu\s*\{[^}]*display:\s*none/.test(css);
+    assert(hidden, 'the menu is hidden by default');
+    assert(/\.export-menu\.visible\s*\{[^}]*display:\s*block/.test(css),
+        'and `.visible` -- the class wireExportMenu actually adds -- is what shows it');
 });
 
 test('exporting a jointed panel emits the toothed cut profile, not the outline', async () => {
@@ -363,7 +410,7 @@ function assertDeepIds(exporters, expected) {
 
 test('the shell exposes the globals index.html\'s inline script calls', async () => {
     await onPage((h) => {
-        for (const name of ['forceCanvasResize', 'applyNewLayout', 'rebuildWorkspaceFromAqui']) {
+        for (const name of ['forceCanvasResize', 'applyNewLayout', 'rebuildWorkspaceFromOtto']) {
             assertEqual(typeof h.win[name], 'function', `window.${name}`);
         }
         assert(h.win.editor === h.app.codeEditor.editor, 'window.editor tracks the live editor');
@@ -422,8 +469,8 @@ test('every shell control is wired exactly once (no duplicate listeners)', async
     await onPage((h, id) => {
         const controls = [
             'run-button', 'view-ast', 'view-errors', 'params-button', 'constraints-button',
-            'export-button', 'doc-new', 'palette-toggle', 'palette-close',
-            'grid-toggle-btn', 'toggle-editor-mode'
+            'export-button', 'doc-new',
+            'mode-code', 'mode-blocks', 'mode-shapes'
         ];
         for (const control of controls) {
             assertEqual(id(control).listenerCount('click'), 1,

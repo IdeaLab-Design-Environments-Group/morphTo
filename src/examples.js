@@ -1,5 +1,5 @@
 // examples.js
-// Shows read-only Blockly blocks (from AQUI) in each example's detail view,
+// Shows read-only Blockly blocks (from Otto) in each example's detail view,
 // replacing the description panel.
 //
 // Sources are the local files in src/examples/Glossary. They used to be
@@ -7,11 +7,15 @@
 // the repo, which made the Examples tab require internet access and depend on
 // a third-party repository staying put.
 //
-// Requires window.rebuildWorkspaceFromAqui, supplied by the shell.
+// Requires window.rebuildWorkspaceFromOtto, supplied by the shell.
 
 document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     const examples = {
+      'puffin': {
+        image: './Images/puffin.png',
+        file: './src/examples/Glossary/puffin.txt'
+      },
       'satsuma': {
         image: './Images/satsuma.png',
         file: './src/examples/Glossary/satsuma.txt'
@@ -117,29 +121,29 @@ document.addEventListener('DOMContentLoaded', () => {
       container.appendChild(hint);
     }
 
-    // The shell's rebuildWorkspaceFromAqui reports a failed parse by returning
+    // The shell's rebuildWorkspaceFromOtto reports a failed parse by returning
     // false rather than throwing, so a bare try/catch would leave the viewer
     // showing an empty grid with no explanation.
-    function renderAquiToWorkspace(aquiText, ws) {
-      if (typeof window.rebuildWorkspaceFromAqui !== 'function') {
-        console.error('rebuildWorkspaceFromAqui is not available on window; the shell should have installed it.');
+    function renderOttoToWorkspace(ottoText, ws) {
+      if (typeof window.rebuildWorkspaceFromOtto !== 'function') {
+        console.error('rebuildWorkspaceFromOtto is not available on window; the shell should have installed it.');
         return false;
       }
       try {
-        if (window.rebuildWorkspaceFromAqui(aquiText, ws) === false) {
-          console.error('AQUI → Blocks render failed: source did not parse.');
+        if (window.rebuildWorkspaceFromOtto(ottoText, ws) === false) {
+          console.error('Otto → Blocks render failed: source did not parse.');
           return false;
         }
         if (typeof ws.zoomToFit === 'function') ws.zoomToFit();
         Blockly.svgResize(ws);
         return true;
       } catch (e) {
-        console.error('AQUI → Blocks render failed:', e);
+        console.error('Otto → Blocks render failed:', e);
         return false;
       }
     }
 
-    async function loadAquiText(url) {
+    async function loadOttoText(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const text = await response.text();
@@ -173,13 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Image
         detailImage.src = ex.image;
 
-        // Fetch AQUI
-        let aquiText = '';
+        // Fetch Otto
+        let ottoText = '';
         try {
-          aquiText = await loadAquiText(ex.file);
-          detailCode.textContent = aquiText; // keep raw AQUI visible
+          ottoText = await loadOttoText(ex.file);
+          detailCode.textContent = ottoText; // keep raw Otto visible
         } catch (error) {
-          const msg = `// Error loading .aqui file: ${error.message}\n// File path: ${ex.file}`;
+          const msg = `// Error loading example file: ${error.message}\n// File path: ${ex.file}`;
           detailCode.textContent = msg;
           console.error('Fetch error:', error);
         }
@@ -198,11 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         const container = detailInfo.querySelector('.example-blockly-viewer');
 
-        // Create read-only workspace + render AQUI → Blocks
+        // Create read-only workspace + render Otto → Blocks
         currentWorkspace = createReadOnlyBlockly(container);
         // If the load failed, or the source did not render, still show an
         // empty workspace with a hint rather than a blank panel.
-        if (!aquiText || !renderAquiToWorkspace(aquiText, currentWorkspace)) {
+        if (!ottoText || !renderOttoToWorkspace(ottoText, currentWorkspace)) {
           showHint(container, 'Unable to load blocks.');
         }
 

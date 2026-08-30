@@ -5,7 +5,7 @@
  * Every shape model implements `toGeometryPath()`, returning either a Path or
  * a geometry Shape; both answer `allPaths()`. Working from that seam rather
  * than from each shape's own parameters is what lets one writer serve all
- * shape types — including shapes drawn on the canvas, which never had AQUI
+ * shape types — including shapes drawn on the canvas, which never had Otto
  * source to read parameters from.
  *
  * @module export/polyline

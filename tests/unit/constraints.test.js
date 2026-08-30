@@ -105,7 +105,7 @@ test('anchors are catalogued per shape type', () => {
     assert(circleAnchors.includes('circ_e'), 'circle compass points');
 });
 
-test('an AQUI constraints block is solved end to end', () => {
+test('an Otto constraints block is solved end to end', () => {
     const context = makeContext();
     ShapeRegistry.resetIdCounters();
     const runner = new CodeRunner({
@@ -341,7 +341,7 @@ test('two constraints sharing a shape are satisfied together, not in turn', () =
     assert(dx < 1e-3, `vertical satisfied, dx=${dx}`);
 });
 
-test('an AQUI block of two constraints solves as one undoable step', () => {
+test('an Otto block of two constraints solves as one undoable step', () => {
     const context = makeContext();
     ShapeRegistry.resetIdCounters();
     const runner = new CodeRunner({
@@ -540,13 +540,23 @@ test('the constraints panel carries a builder with all three sections', async ()
         const builder = panel.querySelector('#constraints-builder');
         assert(builder, 'the builder is rendered into #constraints-panel');
         assertEqual(controller.builderSections.length, 3, 'Coincident, Distance, Horizontal/Vertical');
-        const titles = builder.children.filter(c => c.style.fontWeight === 'bold').map(c => c.textContent);
+        const titles = builder.querySelectorAll('.constraint-section__title').map(t => t.textContent);
         assertEqual(titles.join('|'), 'Coincident|Distance|Horizontal / Vertical', 'section titles');
         assertEqual(builder.querySelectorAll('button').length, 4, 'coincident, distance, horizontal, vertical');
-        assertEqual(builder.querySelectorAll('hr').length, 3, 'ui.mjs separated the sections with rules');
+        assertEqual(builder.querySelectorAll('.constraint-section').length, 3,
+            'each section is its own block, separated by a rule rather than an <hr>');
 
-        // The builder sits above the 'Active Constraints' list, as in ui.mjs.
-        assertEqual(panel.firstElementChild, builder, 'builder first in the panel');
+        // Every select is captioned. They used to be four anonymous dropdowns
+        // in two rows, with nothing saying which was a shape and which an anchor.
+        for (const select of builder.querySelectorAll('select')) {
+            assert(select.getAttribute('aria-label'), 'every select says what it selects');
+        }
+
+        // The builder sits between the panel header and the Active Constraints
+        // list -- inserting at panel.firstChild would put it above the title.
+        const order = panel.children.map(c => c.id || c.className);
+        assertEqual(order.join(' > '), 'constraints-header > constraints-builder > constraints-active',
+            'header, then the builder, then the active list');
 
         for (const section of controller.builderSections) {
             for (const shapeSelect of section.shapes) {

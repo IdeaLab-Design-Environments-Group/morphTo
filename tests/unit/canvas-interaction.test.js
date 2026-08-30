@@ -318,6 +318,35 @@ test('shift-click adds to and removes from the selection without recording', () 
     assertEqual(historyLength(context) - before, 0, 'selection changes record nothing');
 });
 
+test('a 0x0 first resize does not latch the viewport into the corner', () => {
+    // The browser calls resizeCanvas before laying the canvas out, so the
+    // FIRST setCanvasSize always measures 0x0. Treating that as the
+    // initializing resize centred the origin on nothing -- leaving it at
+    // (0, 0), the top-left corner -- and set the initialized flag, so the
+    // real size arriving a frame later was ignored for the whole session.
+    const { vc } = buildStack();
+    vc.setCanvasSize(0, 0);
+    assert(!vc.hasInitializedZoom, 'an unlaid-out canvas does not count as initialization');
+    assertEqual(vc.viewport.x, 0, 'and it must not pan anywhere');
+
+    vc.setCanvasSize(800, 600);
+    assert(vc.hasInitializedZoom, 'the first real size initializes');
+    const origin = vc.worldToScreen(0, 0);
+    assertApprox(origin.x, 400, 1e-9, 'world origin sits at the canvas centre');
+    assertApprox(origin.y, 300, 1e-9, 'in both axes');
+});
+
+test('a later resize never re-centres a viewport the user has moved', () => {
+    const { vc } = buildStack();
+    vc.setCanvasSize(800, 600);
+    vc.pan(120, -40);
+    const moved = { x: vc.viewport.x, y: vc.viewport.y };
+
+    vc.setCanvasSize(1200, 900);
+    assertEqual(vc.viewport.x, moved.x, 'the pan survives a resize');
+    assertEqual(vc.viewport.y, moved.y, 'in both axes');
+});
+
 test('pan and zoom match morphTo: 1:1 mm at zoom 1, clamped [0.2, 6], cursor-anchored', () => {
     const { vc, input } = buildStack();
     vc.setCanvasSize(800, 600);

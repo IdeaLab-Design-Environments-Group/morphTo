@@ -1,6 +1,7 @@
 // parser.js - Complete parser with enhanced fill and color support
 import { resolveColorName } from './colorPalette.js';
 import { Token } from './Lexer.js';
+import { operatorArity, operatorNames } from '../stackform/operators.js';
 
 export class Parser {
   constructor(lexer) {
@@ -540,7 +541,7 @@ export class Parser {
 
   // Helper method to resolve color names to hex values
   resolveColorName(colorName) {
-    // Delegates to the shared AQUI color palette.
+    // Delegates to the shared Otto color palette.
     return resolveColorName(colorName);
   }
 
@@ -616,6 +617,209 @@ export class Parser {
     };
   }
 
+
+  /**
+   * Parse a 3D lift statement.
+   *
+   *   extrude <name> from <source> { key: expr … }
+   *   revolve <name> from <source> { key: expr … }
+   *   sweep   <name> from <source> along <rail> { key: expr … }
+   *
+   * The header carries the source the way `union name { add … }` carries its
+   * operands — as identifiers, not as property values — because a property
+   * value is an EXPRESSION, and an expression identifier resolves to a
+   * parameter. `profile: outline` would look up a parameter named `outline`
+   * and fail; `from outline` names a shape, which is what an op needs.
+   *
+   * `from` is the existing for-loop keyword, reused. Everything inside the
+   * braces goes through the same property machinery as `shape`.
+   */
+  parseLiftOperation() {
+    const opToken = this.currentToken;
+    const op = opToken.type.toLowerCase();
+    this.eat(opToken.type);
+
+    const name = this.currentToken.value;
+    this.eat('IDENTIFIER');
+
+    this.eat('FROM');
+    const source = this.currentToken.value;
+    this.eat('IDENTIFIER');
+
+    let rail = null;
+    if (op === 'sweep') {
+      this.eat('ALONG');
+      rail = this.currentToken.value;
+      this.eat('IDENTIFIER');
+    } else if (this.currentToken.type === 'ALONG') {
+      this.error(`${op} takes no "along" rail; only sweep does`);
+    }
+
+    this.eat('LBRACE');
+    const params = {};
+
+    while (this.currentToken.type !== 'RBRACE') {
+      if (this.currentToken.type === 'EOF') {
+        this.error(`Unterminated ${op} block`);
+      }
+      const paramName = this.currentToken.value;
+      if (!this.isValidLiftPropertyToken(this.currentToken.type)) {
+        this.error(`Expected property name, got ${this.currentToken.type}`);
+      }
+      this.eat(this.currentToken.type);
+      this.eat('COLON');
+      params[paramName] = this.parsePropertyValue();
+    }
+
+    this.eat('RBRACE');
+    return { type: 'lift_operation', op, name, source, rail, params };
+  }
+
+  /**
+   * Property names a lift block accepts.
+   *
+   * Wider than {@link Parser#isValidPropertyToken} by exactly the keywords
+   * that are also natural op-parameter names: `distance` lexes as DISTANCE
+   * (the constraint directive) and `scale` as SCALE (the transform op), and
+   * both are the right word for what they mean here.
+   *
+   * @param {string} tokenType
+   * @returns {boolean}
+   */
+  isValidLiftPropertyToken(tokenType) {
+    return ['IDENTIFIER', 'DISTANCE', 'SCALE', 'POSITION', 'ROTATE'].includes(tokenType);
+  }
+
+  /**
+   * Parse a shaping-curve declaration.
+   *
+   *   curve <name> <kind> { key: expr … }
+   *
+   * A curve is a function f(x) on [0,1] that drives a stack operator as the
+   * profile rises. The block goes through the same property machinery as
+   * `shape`, so its parameters are ordinary expressions and can therefore
+   * reference other parameters — which is what puts a curve in the DAG.
+   */
+  parseCurveDeclaration() {
+    this.eat('CURVE');
+
+    const name = this.currentToken.value;
+    this.eat('IDENTIFIER');
+
+    // The kind is read by value: `constant`, `sine`, `bezier`, `noise`,
+    // `threshold`, `add`, `multiply`, `compose`. None are reserved words, and
+    // keeping them unreserved means none of them stop being usable as a
+    // parameter name elsewhere.
+    const kind = this.currentToken.value;
+    if (this.currentToken.type !== 'IDENTIFIER' && this.currentToken.type !== 'ADD') {
+      this.error(`Expected a curve kind after "curve ${name}", got ${this.currentToken.type}`);
+    }
+    this.eat(this.currentToken.type);
+
+    this.eat('LBRACE');
+    const params = {};
+    while (this.currentToken.type !== 'RBRACE') {
+      if (this.currentToken.type === 'EOF') this.error(`Unterminated curve block for "${name}"`);
+      const paramName = this.currentToken.value;
+      if (!this.isValidLiftPropertyToken(this.currentToken.type)) {
+        this.error(`Expected property name in curve "${name}", got ${this.currentToken.type}`);
+      }
+      this.eat(this.currentToken.type);
+      this.eat('COLON');
+      params[paramName] = this.parsePropertyValue();
+    }
+    this.eat('RBRACE');
+
+    return { type: 'curve_declaration', name, kind, params };
+  }
+
+  /**
+   * Parse a profile-stack operation.
+   *
+   *   stack <name> from <source> {
+   *     height: 200          // properties, in any order
+   *     scale   belly        // operators, IN ORDER, and repeatable
+   *     rotate  twist
+   *   }
+   *
+   * The block mixes two line forms, told apart by one token of lookahead: a
+   * property is `name :`, anything else is an operator line.
+   *
+   * Operators are an ORDERED LIST, not a property map, because order is the
+   * whole point — `scale` then `rotate` is a different form from `rotate`
+   * then `scale`, and the same operator may appear many times. This is the
+   * `union name { add a  add b }` shape generalised.
+   *
+   * Operator names are read by VALUE, so `scale`, `rotate`, `add` and the
+   * boolean keywords work here without being re-reserved.
+   */
+  parseStackOperation() {
+    this.eat('STACK');
+
+    const name = this.currentToken.value;
+    this.eat('IDENTIFIER');
+
+    this.eat('FROM');
+    const source = this.currentToken.value;
+    this.eat('IDENTIFIER');
+
+    this.eat('LBRACE');
+    const params = {};
+    const operations = [];
+
+    while (this.currentToken.type !== 'RBRACE') {
+      if (this.currentToken.type === 'EOF') this.error(`Unterminated stack block for "${name}"`);
+
+      const word = this.currentToken.value;
+      if (this.peekToken().type === 'COLON') {
+        if (!this.isValidLiftPropertyToken(this.currentToken.type)) {
+          this.error(`Expected property name in stack "${name}", got ${this.currentToken.type}`);
+        }
+        this.eat(this.currentToken.type);
+        this.eat('COLON');
+        params[word] = this.parsePropertyValue();
+        continue;
+      }
+
+      // An operator line: the op, then EXACTLY as many operands as it takes.
+      //
+      // The count has to come from the operator table, not from reading
+      // greedily until something stops looking like an operand. Otto's
+      // grammar has no statement terminator, so `rotate twist` followed by
+      // `translateX 12` on the next line is one flat token stream: a greedy
+      // reader takes `translateX` as a second operand of `rotate` and builds a
+      // perfectly plausible AST for a program nobody wrote.
+      const arity = operatorArity(word);
+      if (arity === null) {
+        this.error(
+          `Unknown stack operator "${word}". Known: ${operatorNames().join(', ')}`
+        );
+      }
+      this.eat(this.currentToken.type);
+
+      const operands = [];
+      for (let i = 0; i < arity; i++) {
+        if (this.currentToken.type === 'IDENTIFIER') {
+          operands.push({ kind: 'name', value: this.currentToken.value });
+          this.eat('IDENTIFIER');
+        } else if (this.currentToken.type === 'NUMBER' || this.currentToken.type === 'MINUS') {
+          let sign = 1;
+          if (this.currentToken.type === 'MINUS') { this.eat('MINUS'); sign = -1; }
+          operands.push({ kind: 'number', value: sign * Number(this.currentToken.value) });
+          this.eat('NUMBER');
+        } else {
+          this.error(
+            `"${word}" takes ${arity} operand${arity === 1 ? '' : 's'}; ` +
+            `expected a curve name or a number, got ${this.currentToken.type}`
+          );
+        }
+      }
+      operations.push({ op: word, operands });
+    }
+
+    this.eat('RBRACE');
+    return { type: 'stack_operation', name, source, params, operations };
+  }
 
   parseAnchorRef() {
     const shape = this.currentToken.value;
@@ -756,7 +960,21 @@ export class Parser {
       case 'INTERSECTION':
         statement = this.parseBooleanOperation();
         break;
-        
+
+      case 'EXTRUDE':
+      case 'REVOLVE':
+      case 'SWEEP':
+        statement = this.parseLiftOperation();
+        break;
+
+      case 'CURVE':
+        statement = this.parseCurveDeclaration();
+        break;
+
+      case 'STACK':
+        statement = this.parseStackOperation();
+        break;
+
       case 'DEF':
         statement = this.parseFunctionDefinition();
         break;

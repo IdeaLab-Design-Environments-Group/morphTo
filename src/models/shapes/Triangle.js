@@ -23,6 +23,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -117,4 +118,27 @@ export class Triangle extends Shape {
 
         return GeoPath.fromPoints(points, true);
     }
+
+    /**
+     * Three lines, closed and exact — the same three analytic vertices
+     * {@link Triangle#toGeometryPath} uses. See {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        const cx = this.centerX;
+        const cy = this.centerY;
+        const b = this.base / 2;
+        const h = this.height / 2;
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints([
+                { x: cx - b, y: cy - h },
+                { x: cx + b, y: cy - h },
+                { x: cx, y: cy + h }
+            ], true, 'edge'),
+            closed: true
+        });
+    }
+
 }

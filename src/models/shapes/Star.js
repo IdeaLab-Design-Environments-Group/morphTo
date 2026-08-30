@@ -23,6 +23,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -129,4 +130,33 @@ export class Star extends Shape {
 
         return GeoPath.fromPoints(points, true); // Closed star
     }
+
+    /**
+     * 2*P lines, closed and exact — the same alternating outer/inner vertices
+     * {@link Star#toGeometryPath} computes. See {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        const numPoints = Math.max(3, Math.floor(this.points));
+        const angleStep = (2 * Math.PI) / numPoints;
+        const startAngle = -Math.PI / 2;
+        const points = [];
+
+        for (let i = 0; i < numPoints * 2; i++) {
+            const angle = startAngle + (i * angleStep) / 2;
+            const radius = i % 2 === 0 ? this.outerRadius : this.innerRadius;
+            points.push({
+                x: this.centerX + radius * Math.cos(angle),
+                y: this.centerY + radius * Math.sin(angle)
+            });
+        }
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(points, true, 'edge'),
+            closed: true
+        });
+    }
+
 }

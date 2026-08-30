@@ -4,6 +4,15 @@
  */
 import { Serializer } from './Serializer.js';
 
+/** Extension written by save. */
+const SAVE_EXTENSION = '.otto';
+
+/**
+ * Extensions accepted by load. `.pds` is the pre-Otto name of the same JSON
+ * format, still opened so scenes saved before the rename keep working.
+ */
+const OPEN_EXTENSIONS = [SAVE_EXTENSION, '.pds'];
+
 export class FileManager {
     constructor(tabManager, serializer) {
         this.tabManager = tabManager;
@@ -12,13 +21,13 @@ export class FileManager {
     }
     
     /**
-     * Export to file (.pds format)
+     * Export to file (.otto format)
      * @param {string} filename - Optional filename
      */
     exportToFile(filename = null) {
         try {
             const json = Serializer.serialize(this.tabManager);
-            const defaultFilename = filename || `nova_otto_${new Date().toISOString().split('T')[0]}.pds`;
+            const defaultFilename = filename || `nova_otto_${new Date().toISOString().split('T')[0]}${SAVE_EXTENSION}`;
             this.createDownload(json, defaultFilename);
             return true;
         } catch (error) {
@@ -39,8 +48,8 @@ export class FileManager {
             }
             
             // Check file extension
-            if (!file.name.endsWith('.pds')) {
-                throw new Error('Invalid file format. Expected .pds file');
+            if (!OPEN_EXTENSIONS.some((ext) => file.name.endsWith(ext))) {
+                throw new Error(`Invalid file format. Expected ${OPEN_EXTENSIONS.join(' or ')} file`);
             }
             
             const content = await this.readFile(file);
@@ -62,7 +71,7 @@ export class FileManager {
         return new Promise((resolve) => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.pds';
+            input.accept = OPEN_EXTENSIONS.join(',');
             
             input.addEventListener('change', async (e) => {
                 const file = e.target.files[0];

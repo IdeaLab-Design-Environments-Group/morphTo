@@ -38,6 +38,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { ProfileError, buildProfile, circleArcs } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  Declared here for consistency with other shape
@@ -212,4 +213,59 @@ export class Donut extends Shape {
 
         return points;
     }
+
+    /**
+     * The OUTER ring boundary: four quarter arcs, closed and exact.
+     *
+     * A Profile is one contiguous chain, so the hole cannot live in the same
+     * profile as the boundary that encloses it — use {@link Donut#toProfiles}
+     * to get both loops.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `degenerate` for a zero outer radius.
+     */
+    toProfile() {
+        if (!(this.outerRadius > 0)) {
+            throw new ProfileError(
+                'degenerate',
+                `Donut "${this.id}" has outer radius ${this.outerRadius}`,
+                this.type
+            );
+        }
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: circleArcs(this.centerX, this.centerY, this.outerRadius, 'outer'),
+            closed: true
+        });
+    }
+
+    /**
+     * Both loops: the outer boundary first, then the hole.
+     *
+     * The inner loop is traced the opposite way round, matching the
+     * winding-rule hole {@link Donut#toGeometryPath} builds, so a consumer
+     * can tell boundary from hole by direction alone. Eight exact arcs in
+     * total, four per loop.
+     *
+     * A zero inner radius means a solid disc, and only the outer loop is
+     * returned.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile[]}
+     */
+    toProfiles() {
+        const profiles = [this.toProfile()];
+
+        if (this.innerRadius > 0) {
+            profiles.push(buildProfile({
+                id: `${this.id}/hole`,
+                shapeType: this.type,
+                segments: circleArcs(this.centerX, this.centerY, this.innerRadius, 'inner', false),
+                closed: true
+            }));
+        }
+
+        return profiles;
+    }
+
 }

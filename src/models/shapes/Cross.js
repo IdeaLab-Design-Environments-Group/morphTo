@@ -23,6 +23,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -170,4 +171,23 @@ export class Cross extends Shape {
             { x: cx - t, y: cy - t }
         ];
     }
+
+    /**
+     * Twelve lines, closed and exact — {@link Cross#getPoints} verbatim.
+     *
+     * A cross whose thickness equals its width has coincident vertices; those
+     * zero-length edges are dropped, so the profile degenerates gracefully to
+     * a square rather than failing validation.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(this.getPoints(), true, 'edge'),
+            closed: true
+        });
+    }
+
 }

@@ -29,6 +29,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { DEFAULT_PROFILE_TOLERANCE, ProfileError, buildProfile, ellipseBiarcs } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -131,4 +132,57 @@ export class Ellipse extends Shape {
         }
         return GeoPath.fromPoints(points, true);
     }
+
+    /**
+     * REFUSED by default: an ellipse has no exact line-and-arc form.
+     *
+     * Only circular arcs and lines have an exact developable lift under
+     * revolution. An ellipse is neither, at any radius ratio, so silently
+     * approximating one would put an unbounded error into a form that claims
+     * to flatten without distortion. The refusal is the useful behaviour —
+     * it points at using a Circle, or at accepting the error explicitly.
+     *
+     * Pass `allowEllipseApproximation: true` to opt in. The profile then
+     * comes back with `exact: false` and a `deviation` measured against the
+     * analytic ellipse — not against the intermediate cubics — so the number
+     * covers the whole approximation chain.
+     *
+     * @param {Object} [options]
+     * @param {boolean} [options.allowEllipseApproximation=false]
+     * @param {number} [options.tolerance] - τ_profile, mm.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `inexact-shape` unless opted in; code
+     *   `degenerate` for a zero radius.
+     */
+    toProfile({ allowEllipseApproximation = false, tolerance = DEFAULT_PROFILE_TOLERANCE } = {}) {
+        if (!allowEllipseApproximation) {
+            throw new ProfileError(
+                'inexact-shape',
+                `Ellipse "${this.id}" has no exact line-and-arc profile. `
+                + 'Use a Circle, or pass allowEllipseApproximation: true to accept a biarc fit.',
+                this.type
+            );
+        }
+        if (!(this.radiusX > 0) || !(this.radiusY > 0)) {
+            throw new ProfileError(
+                'degenerate',
+                `Ellipse "${this.id}" has radii ${this.radiusX} x ${this.radiusY}`,
+                this.type
+            );
+        }
+
+        const { segments, deviation } = ellipseBiarcs(
+            this.centerX, this.centerY, this.radiusX, this.radiusY, tolerance, 'edge'
+        );
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments,
+            closed: true,
+            exact: false,
+            deviation
+        });
+    }
+
 }

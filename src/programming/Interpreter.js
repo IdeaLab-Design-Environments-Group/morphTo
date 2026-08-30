@@ -13,18 +13,44 @@ import {
   DrawVisitor,
   ConstraintsVisitor,
   LayerVisitor,
-  TransformVisitor
+  TransformVisitor,
+  LiftVisitor,
+  CurveVisitor,
+  StackVisitor
 } from './InterpreterVisitors.js';
+import { defaultMeshCache } from '../form3d/cache.js';
+import { DEFAULT_TOLERANCE } from '../geometry/constants.js';
 
 export class Interpreter {
-  constructor() {
+  /**
+   * @param {Object} [options]
+   * @param {number} [options.documentTolerance] - Model tolerance in mm, the
+   *   default for any 3D op that does not carry its own `tolerance:`.
+   * @param {import('../form3d/cache.js').MeshCache} [options.meshCache] - Where
+   *   lifted meshes are cached. Shared across runs by default, because
+   *   CodeRunner builds a fresh Interpreter for every run and a per-run cache
+   *   would never hit.
+   */
+  constructor({ documentTolerance = DEFAULT_TOLERANCE, meshCache = defaultMeshCache } = {}) {
     this.env = new Environment();
+    this.documentTolerance = documentTolerance;
+    this.meshCache = meshCache;
     this.booleanOperator = booleanOperator;
     this.functions = new Map();
     this.currentReturn = null;
     this.functionCallCounters = new Map();
     this.turtleDrawer = new TurtleDrawer();
     this.constraints = [];
+    /**
+     * Declared shaping curves and profile stacks, by name (src/stackform/).
+     * Both hold plain specs rather than compiled functions: a curve nobody
+     * uses should cost nothing, and a stack's operands are resolved by name
+     * when it is compiled, which may be after the statement that declares it.
+     * @type {Map<string, Object>}
+     */
+    this.curves = new Map();
+    /** @type {Map<string, Object>} */
+    this.stacks = new Map();
     this.currentFunctionContext = null;
     this.currentLoopCounter = undefined;
     
@@ -40,10 +66,13 @@ export class Interpreter {
       constraints: new ConstraintsVisitor(this),
       layer: new LayerVisitor(this),
       transform: new TransformVisitor(this),
+      lift: new LiftVisitor(this),
+      curve: new CurveVisitor(this),
+      stack: new StackVisitor(this),
       functionCall: new FunctionVisitor(this) // FunctionVisitor handles both definition and call
     };
     
-    // Shared AQUI color-name map (see programming/colorPalette.js).
+    // Shared Otto color-name map (see programming/colorPalette.js).
     this.colorMap = COLOR_MAP;
   }
 
@@ -55,6 +84,7 @@ export class Interpreter {
     return {
       parameters: this.env.parameters,
       shapes: this.env.shapes,
+      solids: this.env.solids,
       layers: this.env.layers,
       functions: this.functions,
       constraints: this.constraints,
@@ -86,6 +116,12 @@ export class Interpreter {
         return this.visitors.controlFlow.visitForLoop(node);
       case 'boolean_operation':
         return this.visitors.booleanOperation.visit(node);
+      case 'lift_operation':
+        return this.visitors.lift.visit(node);
+      case 'curve_declaration':
+        return this.visitors.curve.visit(node);
+      case 'stack_operation':
+        return this.visitors.stack.visit(node);
       case 'function_definition':
         return this.visitors.function.visitFunctionDefinition(node);
       case 'function_call':

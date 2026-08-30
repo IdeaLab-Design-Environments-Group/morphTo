@@ -27,7 +27,7 @@ export const SYSTEM_INSTRUCTION = [
     'used to teach digital fabrication (laser cutting, CNC routing, 3D-printed',
     'jigs) to students. You are given a description of the student\'s current',
     'design: its parameters, its shapes with dimensions in millimetres, which',
-    'dimensions are driven by parameters, and optionally the AQUI source.',
+    'dimensions are driven by parameters, and optionally the Otto source.',
     '',
     'Give concise, specific, encouraging coaching a teacher would give before',
     'the student sends the design to a machine. Prioritise:',

@@ -7,6 +7,10 @@ import { ShapeRegistry } from '../../src/models/shapes/ShapeRegistry.js';
 import { shapesToSVG } from '../../src/export/svgExport.js';
 import { shapesToDXF } from '../../src/export/dxfExport.js';
 import { geometryToPolylines, polylineBounds } from '../../src/export/polyline.js';
+import { solidToSTL, triangleMeshFromDisplay, triangleCount } from '../../src/export/stlExport.js';
+import { triangulate, edgeUsage, meshVolume } from '../../src/stackform/stl.js';
+import { LayerForm } from '../../src/stackform/LayerForm.js';
+import { Vec3 } from '../../src/geometry/Vec3.js';
 
 /** Pull the (code, value) pairs out of a DXF stream. */
 function dxfPairs(text) {
@@ -89,7 +93,7 @@ test('every registered shape type exports to both formats', () => {
 
 test('a shape made on the canvas exports the same as one made from code', () => {
     // The point of reading the store rather than the interpreter: this shape
-    // has no AQUI source behind it at all.
+    // has no Otto source behind it at all.
     const drawn = ShapeRegistry.create('star', { x: -110, y: -50 }, { radius: 30, points: 5 });
     const bounds = polylineBounds(geometryToPolylines(drawn.toGeometryPath()));
     assert(bounds, 'has bounds');
@@ -308,4 +312,70 @@ test('an empty label writes nothing rather than an empty entity', () => {
 
 test('polylineBounds returns null for nothing to measure', () => {
     assertEqual(polylineBounds([]), null);
+});
+
+// ---- STL ------------------------------------------------------------------
+
+/** A closed prism as a LayerForm: two layers, one square each. */
+function squarePrism(side = 10, height = 4) {
+    const h = side / 2;
+    const ring = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]];
+    const form = new LayerForm({ height });
+    form.addLayer(0, 0, [ring.map(p => [...p])]);
+    form.addLayer(1, height, [ring.map(p => [...p])]);
+    return form;
+}
+
+test('a stack exports as binary STL, through the watertight stackform path', () => {
+    const buffer = solidToSTL({ form: squarePrism() });
+    assert(buffer instanceof ArrayBuffer, 'binary, not text');
+
+    // Binary STL: 80-byte header, uint32 count, then 50 bytes a facet.
+    const count = triangleCount(buffer);
+    assert(count > 0, 'the prism produced facets');
+    assertEqual(buffer.byteLength, 84 + count * 50, 'the file is exactly as long as it claims');
+
+    // The count is not asserted directly -- how many triangles a cap fan takes
+    // is the triangulator's business. What must hold is that the solid is
+    // closed and the right size, which is what a printer cares about.
+    const mesh = triangulate(squarePrism());
+    assertEqual(edgeUsage(mesh).openEdges, 0, 'watertight: every edge shared by two triangles');
+    assertApprox(meshVolume(mesh), 10 * 10 * 4, 1e-9, 'volume is side x side x height');
+    assertEqual(mesh.triangles.length, count, 'and the file carries exactly that mesh');
+
+    const view = new DataView(buffer);
+    // The first facet's normal must be a real one -- a zero normal is the
+    // classic marker of an STL written by something that did not compute them.
+    const n = [view.getFloat32(84, true), view.getFloat32(88, true), view.getFloat32(92, true)];
+    assertApprox(Math.hypot(...n), 1, 1e-5, 'unit normal, not 0 0 0');
+});
+
+test('a DisplayMesh becomes an indexed triangle mesh, holes included', () => {
+    // A square with a square hole. The GPU path already reduces this by
+    // bridging the hole to the outer ring; the exporter reuses that, so a
+    // plate with a bolt hole exports with the hole still in it.
+    const ring = (s) => [
+        new Vec3(-s, -s, 0), new Vec3(s, -s, 0), new Vec3(s, s, 0), new Vec3(-s, s, 0)
+    ];
+    const display = {
+        polygons: [{
+            faceId: 0, kind: 'planar', normal: new Vec3(0, 0, 1),
+            points: ring(10), holes: [ring(3).reverse()]
+        }]
+    };
+    const mesh = triangleMeshFromDisplay(display);
+    assertEqual(mesh.positions.length / 3, 8, 'outer ring plus hole ring');
+    assert(mesh.triangles.length >= 6, `the annulus was triangulated, got ${mesh.triangles.length}`);
+    for (const tri of mesh.triangles) {
+        for (const i of tri) {
+            assert(Number.isInteger(i) && i >= 0 && i < mesh.positions.length / 3,
+                `index ${i} is in range`);
+        }
+    }
+});
+
+test('a solid with nothing in it exports nothing rather than an empty file', () => {
+    assertEqual(solidToSTL({}), null, 'neither kind supplied');
+    assertEqual(solidToSTL({ form: new LayerForm({ height: 0 }) }), null, 'a form with no layers');
+    assertEqual(triangleCount(null), 0, 'and the count of nothing is zero');
 });

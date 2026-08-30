@@ -15,11 +15,25 @@ export class CodeRunner {
      * @param {Object} options
      * @param {import('../core/ShapeStore.js').ShapeStore} options.shapeStore
      * @param {import('../core/ParameterStore.js').ParameterStore} options.parameterStore
+     * @param {number} [options.documentTolerance] - Model tolerance in mm; the
+     *   default for any 3D op that does not carry its own `tolerance:`.
+     * @param {import('../form3d/cache.js').MeshCache} [options.meshCache] -
+     *   Overrides the shared lifted-mesh cache. Mainly for tests, which need
+     *   isolated hit/miss counters.
      */
-    constructor({ shapeStore, parameterStore }) {
+    constructor({ shapeStore, parameterStore, documentTolerance, meshCache } = {}) {
         this.shapeStore = shapeStore;
         this.parameterStore = parameterStore;
-        this.interpreter = new Interpreter();
+        /**
+         * Options handed to every Interpreter this runner builds. `run()`
+         * makes a fresh interpreter each time, so the 3D settings have to live
+         * on the runner rather than on the interpreter.
+         * @type {Object}
+         */
+        this.interpreterOptions = {};
+        if (documentTolerance !== undefined) this.interpreterOptions.documentTolerance = documentTolerance;
+        if (meshCache !== undefined) this.interpreterOptions.meshCache = meshCache;
+        this.interpreter = new Interpreter(this.interpreterOptions);
         this.lastResult = null;
     }
 
@@ -40,7 +54,7 @@ export class CodeRunner {
             const ast = parser.parse();
             
             // Reset interpreter for fresh state
-            this.interpreter = new Interpreter();
+            this.interpreter = new Interpreter(this.interpreterOptions);
             const result = this.interpreter.interpret(ast);
             this.lastResult = result;
 
@@ -93,11 +107,15 @@ export class CodeRunner {
                 }
             }
 
+            // Solids are NOT mapped into ShapeStore: a lifted mesh is not a 2D
+            // shape and the canvas has nothing to do with it. They ride out on
+            // `result.solids` for the 3D viewport to pick up.
             return {
                 success: true,
                 result,
                 shapesCreated: result.shapes ? result.shapes.size : 0,
-                parametersCreated: result.parameters ? result.parameters.size : 0
+                parametersCreated: result.parameters ? result.parameters.size : 0,
+                solidsCreated: result.solids ? result.solids.size : 0
             };
 
         } catch (error) {
@@ -176,7 +194,7 @@ export class CodeRunner {
     /**
      * Map interpreter params to ShapeRegistry options format.
      *
-     * Snake_case AQUI names (pitch_diameter, corner_radius, …) are resolved
+     * Snake_case Otto names (pitch_diameter, corner_radius, …) are resolved
      * by each shape's schema `aliases`, so params pass through untouched —
      * only path point arrays need normalization into {x, y} objects.
      * @private
@@ -219,7 +237,7 @@ export class CodeRunner {
      * Reset the interpreter state
      */
     reset() {
-        this.interpreter = new Interpreter();
+        this.interpreter = new Interpreter(this.interpreterOptions);
         this.lastResult = null;
     }
 }

@@ -43,6 +43,17 @@ export class ShapeRegistry {
     // Private registry: Map<type, ShapeRegistryEntry>
     static #registry = new Map();
 
+    // Registrations displaced by a later one for the same type, newest last:
+    // Map<type, ShapeRegistryEntry[]>.
+    //
+    // Registering an existing type SHADOWS it rather than destroying it, so
+    // that unregistering brings the previous registration back. Without this,
+    // a plugin that registers its own 'triangle' (or 'circle', or
+    // 'rectangle') permanently deletes the built-in when it is deactivated,
+    // and every later create() and fromJSON() for that type throws — the
+    // user's existing shapes included.
+    static #shadowed = new Map();
+
     // Counter for generating readable IDs per shape type
     static #idCounters = new Map();
 
@@ -106,6 +117,16 @@ export class ShapeRegistry {
         }
 
         const normalizedType = type.toLowerCase();
+
+        // Shadow, do not destroy: keep whatever held this type so that
+        // unregister() can put it back (see #shadowed).
+        const displaced = this.#registry.get(normalizedType);
+        if (displaced) {
+            const stack = this.#shadowed.get(normalizedType) ?? [];
+            stack.push(displaced);
+            this.#shadowed.set(normalizedType, stack);
+        }
+
         this.#registry.set(normalizedType, new ShapeRegistryEntry(
             createFunction,
             fromJSONFunction
@@ -133,12 +154,31 @@ export class ShapeRegistry {
      * Accepts a type string or a Shape subclass (symmetric with
      * {@link ShapeRegistry.registerClass}); ignores anything else rather than
      * throwing, so best-effort cleanup paths stay robust.
+     *
+     * If this type was SHADOWING an earlier registration, that earlier one is
+     * restored instead of the type being deleted. Deactivating a plugin that
+     * registered its own 'triangle' must give the built-in Triangle back, not
+     * leave a hole that makes every existing triangle in the user's scene
+     * unloadable.
+     *
      * @param {string|Function} type
      */
     static unregister(type) {
         const typeName = (typeof type === 'function' && type.type) ? type.type : type;
         if (!typeName || typeof typeName !== 'string') return;
-        this.#registry.delete(typeName.toLowerCase());
+
+        const normalizedType = typeName.toLowerCase();
+        this.#registry.delete(normalizedType);
+
+        const stack = this.#shadowed.get(normalizedType);
+        if (!stack || stack.length === 0) return;
+
+        this.#registry.set(normalizedType, stack.pop());
+        if (stack.length === 0) this.#shadowed.delete(normalizedType);
+        // The type still exists but is now served by a different class, so
+        // listeners (e.g. ShapeLibrary) have to refresh just as they do for a
+        // fresh registration.
+        this.#notifyRegistered(normalizedType);
     }
 
     /**

@@ -9,79 +9,143 @@ import { CodeRunner } from '../programming/CodeRunner.js';
 import { ReplaceSceneCommand } from '../commands/sceneCommands.js';
 import { Lexer } from '../programming/Lexer.js';
 import { Parser } from '../programming/Parser.js';
+import { CURVE_KINDS } from '../stackform/curves.js';
+import { STACK_OPERANDS, operatorArity } from '../stackform/operators.js';
 
 const TOOLBOX_XML = `
 <xml xmlns="https://developers.google.com/blockly/xml" style="display: none">
   <category name="Turtle" colour="#D65C5C">
-    <block type="aqui_draw"/>
-    <block type="aqui_forward">
+    <block type="otto_draw"/>
+    <block type="otto_forward">
       <value name="D">
         <shadow type="math_number"><field name="NUM">10</field></shadow>
       </value>
     </block>
-    <block type="aqui_backward">
+    <block type="otto_backward">
       <value name="D">
         <shadow type="math_number"><field name="NUM">10</field></shadow>
       </value>
     </block>
-    <block type="aqui_right">
+    <block type="otto_right">
       <value name="A">
         <shadow type="math_number"><field name="NUM">90</field></shadow>
       </value>
     </block>
-    <block type="aqui_left">
+    <block type="otto_left">
       <value name="A">
         <shadow type="math_number"><field name="NUM">90</field></shadow>
       </value>
     </block>
-    <block type="aqui_goto">
+    <block type="otto_goto">
       <value name="P">
         <shadow type="lists_create_with"/>
       </value>
     </block>
-    <block type="aqui_penup"/>
-    <block type="aqui_pendown"/>
+    <block type="otto_penup"/>
+    <block type="otto_pendown"/>
   </category>
 
   <category name="Shapes" colour="#5CA65C">
-    <block type="aqui_shape_circle"/>
-    <block type="aqui_shape_rectangle"/>
-    <block type="aqui_shape_triangle"/>
-    <block type="aqui_shape_polygon"/>
-    <block type="aqui_shape_star"/>
-    <block type="aqui_shape_text"/>
-    <block type="aqui_shape_ellipse"/>
-    <block type="aqui_shape_arc"/>
-    <block type="aqui_shape_line"/>
-    <block type="aqui_shape_roundedrectangle"/>
-    <block type="aqui_shape_arrow"/>
-    <block type="aqui_shape_donut"/>
-    <block type="aqui_shape_gear"/>
-    <block type="aqui_shape_cross"/>
+    <block type="otto_shape_circle"/>
+    <block type="otto_shape_rectangle"/>
+    <block type="otto_shape_triangle"/>
+    <block type="otto_shape_polygon"/>
+    <block type="otto_shape_star"/>
+    <block type="otto_shape_text"/>
+    <block type="otto_shape_ellipse"/>
+    <block type="otto_shape_arc"/>
+    <block type="otto_shape_line"/>
+    <block type="otto_shape_roundedrectangle"/>
+    <block type="otto_shape_arrow"/>
+    <block type="otto_shape_donut"/>
+    <block type="otto_shape_gear"/>
+    <block type="otto_shape_cross"/>
   </category>
 
   <category name="Parameters" colour="#CE5C81">
-    <block type="aqui_param">
+    <block type="otto_param">
       <field name="NAME">size</field>
       <value name="VALUE">
         <shadow type="math_number"><field name="NUM">150</field></shadow>
       </value>
     </block>
-    <block type="aqui_param_get">
+    <block type="otto_param_get">
       <field name="NAME">size</field>
     </block>
   </category>
 
   <category name="Shape Properties" colour="#CE9E36">
-    <block type="aqui_prop_expr"/>
-    <block type="aqui_prop_bool"/>
+    <block type="otto_prop_expr"/>
+    <block type="otto_prop_bool"/>
   </category>
 
   <category name="Boolean" colour="#5C81A6">
-    <block type="aqui_union"/>
-    <block type="aqui_intersection"/>
-    <block type="aqui_difference"/>
-    <block type="aqui_ref"/>
+    <block type="otto_union"/>
+    <block type="otto_intersection"/>
+    <block type="otto_difference"/>
+    <block type="otto_ref"/>
+  </category>
+
+  <!-- The 3D lift ops. Hue #36CE9E is a channel rotation of Shape Properties
+       #CE9E36, keeping the palette family while staying distinct from every
+       other category colour. Each op takes its parameters as otto_prop_expr
+       rows, the same way a shape block does. -->
+  <category name="3D" colour="#36CE9E">
+    <block type="otto_extrude">
+      <statement name="PROPS">
+        <block type="otto_prop_expr">
+          <field name="KEY">distance</field>
+          <value name="VAL">
+            <shadow type="math_number"><field name="NUM">10</field></shadow>
+          </value>
+        </block>
+      </statement>
+    </block>
+    <block type="otto_revolve">
+      <statement name="PROPS">
+        <block type="otto_prop_expr">
+          <field name="KEY">angle</field>
+          <value name="VAL">
+            <shadow type="math_number"><field name="NUM">360</field></shadow>
+          </value>
+        </block>
+      </statement>
+    </block>
+    <block type="otto_sweep"/>
+  </category>
+
+  <!-- Free-form profile stacks. Hue #9E36CE is another channel rotation of the
+       same base, so it reads as a sibling of 3D while staying distinct: these
+       forms are NOT developable and do not flatten into a cut sheet. -->
+  <category name="Stacks" colour="#9E36CE">
+    <block type="otto_curve">
+      <field name="KIND">sine</field>
+      <statement name="PROPS">
+        <block type="otto_prop_expr">
+          <field name="KEY">amplitude</field>
+          <value name="VAL">
+            <shadow type="math_number"><field name="NUM">0.3</field></shadow>
+          </value>
+        </block>
+      </statement>
+    </block>
+    <block type="otto_stack">
+      <statement name="PROPS">
+        <block type="otto_prop_expr">
+          <field name="KEY">height</field>
+          <value name="VAL">
+            <shadow type="math_number"><field name="NUM">200</field></shadow>
+          </value>
+          <next>
+            <block type="otto_stack_op">
+              <field name="OP">scale</field>
+              <field name="A">belly</field>
+            </block>
+          </next>
+        </block>
+      </statement>
+    </block>
+    <block type="otto_stack_op"/>
   </category>
 
   <category name="Math" colour="#5C68A6">
@@ -101,7 +165,7 @@ const TOOLBOX_XML = `
        permutation of morphTo's Boolean #5C81A6, keeping the same palette family
        while staying distinct from every morphTo category colour. -->
   <category name="Control" colour="#815CA6">
-    <block type="aqui_for">
+    <block type="otto_for">
       <value name="FROM">
         <shadow type="math_number"><field name="NUM">0</field></shadow>
       </value>
@@ -284,15 +348,15 @@ export class BlocksEditor extends Component {
     }
 
     getShapeBlockType(type) {
-        return `aqui_shape_${String(type || '').toLowerCase()}`;
+        return `otto_shape_${String(type || '').toLowerCase()}`;
     }
 
     getBooleanBlockType(op) {
-        return `aqui_${String(op || '').toLowerCase()}`;
+        return `otto_${String(op || '').toLowerCase()}`;
     }
 
     getPropertyBlockType(prop) {
-        return `aqui_prop_${String(prop || '').toLowerCase()}`;
+        return `otto_prop_${String(prop || '').toLowerCase()}`;
     }
 
     sanitizeIdentifier(raw, fallback = 'shape') {
@@ -472,6 +536,8 @@ export class BlocksEditor extends Component {
         // Otto-only; see the Control category comment in TOOLBOX_XML.
         const C_COLOR = '#815CA6';
         const R_COLOR = '#8696D0';
+        // 3D lift ops; see the "3D" category comment in TOOLBOX_XML.
+        const D_COLOR = '#36CE9E';
 
         const collectLinesUnique_ = (blk, input = 'STACK') => {
             const lines = [];
@@ -487,7 +553,7 @@ export class BlocksEditor extends Component {
         };
 
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_prop_expr',
+            type: 'otto_prop_expr',
             message0: '%1 %2',
             args0: [
                 { type: 'field_input', name: 'KEY', text: 'radius' },
@@ -499,7 +565,7 @@ export class BlocksEditor extends Component {
         }]);
 
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_prop_bool',
+            type: 'otto_prop_bool',
             message0: '%1 %2',
             args0: [
                 { type: 'field_input', name: 'KEY', text: 'fill' },
@@ -509,11 +575,11 @@ export class BlocksEditor extends Component {
             nextStatement: null,
             colour: P_COLOR
         }]);
-        JS['aqui_prop_bool'] = b =>
+        JS['otto_prop_bool'] = b =>
             `${b.getFieldValue('KEY').trim()}: ${b.getFieldValue('VAL') === 'TRUE'}`;
 
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_ref',
+            type: 'otto_ref',
             message0: '%1 %2',
             args0: [
                 { type: 'field_dropdown', name: 'OP', options: [['add', 'add'], ['subtract', 'subtract']] },
@@ -523,13 +589,13 @@ export class BlocksEditor extends Component {
             nextStatement: null,
             colour: R_COLOR
         }]);
-        JS['aqui_ref'] = b =>
+        JS['otto_ref'] = b =>
             `${b.getFieldValue('OP')} ${b.getFieldValue('TARGET')}`;
 
         const shapeTypes = ['circle', 'rectangle', 'triangle', 'polygon', 'star', 'text', 'ellipse', 'arc', 'line', 'roundedrectangle', 'arrow', 'donut', 'gear', 'cross'];
 
         shapeTypes.forEach(type => {
-            const blockType = `aqui_shape_${type}`;
+            const blockType = `otto_shape_${type}`;
             Blockly.defineBlocksWithJsonArray([{
                 type: blockType,
                 message0: `shape ${type} %1`,
@@ -563,7 +629,7 @@ export class BlocksEditor extends Component {
 
         ['union', 'intersection', 'difference'].forEach(kw => {
             Blockly.defineBlocksWithJsonArray([{
-                type: `aqui_${kw}`,
+                type: `otto_${kw}`,
                 message0: `${kw} %1`,
                 args0: [{ type: 'field_input', name: 'NAME', text: `${kw}1` }],
                 message1: '%1',
@@ -573,13 +639,143 @@ export class BlocksEditor extends Component {
                 colour: B_COLOR
             }]);
 
-            JS[`aqui_${kw}`] = blk =>
+            JS[`otto_${kw}`] = blk =>
                 `${kw} ${blk.getFieldValue('NAME').trim()} {\n` +
                 `${collectLinesUnique_(blk, 'STACK')}\n}\n`;
         });
 
+        // --- 3D lift ops --------------------------------------------------
+        //
+        // Header fields mirror the statement grammar exactly — `extrude NAME
+        // from SOURCE`, `sweep NAME from SOURCE along RAIL` — because the
+        // source is a SHAPE NAME, not an expression, and a property row would
+        // resolve it as a parameter. The body reuses otto_prop_expr, so a
+        // parameter block plugs into `distance:` the same way it plugs into a
+        // shape's `radius:`.
+        const liftOps = [
+            { kw: 'extrude', name: 'solid1', source: 'r1', rail: null },
+            { kw: 'revolve', name: 'body1', source: 'r1', rail: null },
+            { kw: 'sweep', name: 'tube1', source: 'c1', rail: 'path1' }
+        ];
+
+        liftOps.forEach(({ kw, name, source, rail }) => {
+            const args = [
+                { type: 'field_input', name: 'NAME', text: name },
+                { type: 'field_input', name: 'SOURCE', text: source }
+            ];
+            let message0 = `${kw} %1 from %2`;
+            if (rail) {
+                message0 += ' along %3';
+                args.push({ type: 'field_input', name: 'RAIL', text: rail });
+            }
+
+            Blockly.defineBlocksWithJsonArray([{
+                type: `otto_${kw}`,
+                message0,
+                args0: args,
+                message1: '%1',
+                args1: [{ type: 'input_statement', name: 'PROPS' }],
+                previousStatement: null,
+                nextStatement: null,
+                colour: D_COLOR,
+                tooltip: `Lift a 2D shape into a 3D solid by ${kw}`,
+                helpUrl: ''
+            }]);
+
+            JS[`otto_${kw}`] = blk => {
+                const nm = blk.getFieldValue('NAME').trim();
+                const src = blk.getFieldValue('SOURCE').trim();
+                const along = rail ? ` along ${blk.getFieldValue('RAIL').trim()}` : '';
+                const body = collectLinesUnique_(blk, 'PROPS');
+                return `${kw} ${nm} from ${src}${along} {\n${body}\n}\n`;
+            };
+        });
+
+        // Free-form profile stacks (src/stackform/). Three blocks:
+        //
+        //   otto_curve      declares a shaping curve f(x) on [0,1]
+        //   otto_stack      the lift itself
+        //   otto_stack_op   one ORDERED operator line inside a stack
+        //
+        // A stack's body holds two kinds of row and they mean different
+        // things: otto_prop_expr rows are unordered properties (`height:`,
+        // `layers:`), otto_stack_op rows are an ordered pipeline where the
+        // sequence is the design. Both plug into the same PROPS input because
+        // the generator emits them in the order they are stacked, which is
+        // exactly the order the parser reads them back in.
+        const STACK_COLOR = '#9E36CE';
+
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_draw',
+            type: 'otto_curve',
+            message0: 'curve %1 %2',
+            args0: [
+                { type: 'field_input', name: 'NAME', text: 'belly' },
+                { type: 'field_dropdown', name: 'KIND', options: CURVE_KINDS.map(k => [k, k]) }
+            ],
+            message1: '%1',
+            args1: [{ type: 'input_statement', name: 'PROPS' }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: STACK_COLOR,
+            tooltip: 'A shaping curve: a function of height, 0 at the bottom to 1 at the top',
+            helpUrl: ''
+        }]);
+        JS['otto_curve'] = blk =>
+            `curve ${blk.getFieldValue('NAME').trim()} ${blk.getFieldValue('KIND')} {\n` +
+            `${collectLinesUnique_(blk, 'PROPS')}\n}\n`;
+
+        Blockly.defineBlocksWithJsonArray([{
+            type: 'otto_stack',
+            message0: 'stack %1 from %2',
+            args0: [
+                { type: 'field_input', name: 'NAME', text: 'pot' },
+                { type: 'field_input', name: 'SOURCE', text: 'base' }
+            ],
+            message1: '%1',
+            args1: [{ type: 'input_statement', name: 'PROPS' }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: STACK_COLOR,
+            tooltip: 'Sweep a 2D shape upward, transforming it as it rises',
+            helpUrl: ''
+        }]);
+        JS['otto_stack'] = blk =>
+            `stack ${blk.getFieldValue('NAME').trim()} from ${blk.getFieldValue('SOURCE').trim()} {\n` +
+            `${collectLinesUnique_(blk, 'PROPS')}\n}\n`;
+
+        Blockly.defineBlocksWithJsonArray([{
+            type: 'otto_stack_op',
+            message0: '%1 %2 %3',
+            args0: [
+                {
+                    type: 'field_dropdown',
+                    name: 'OP',
+                    options: Object.keys(STACK_OPERANDS).map(o => [o, o])
+                },
+                { type: 'field_input', name: 'A', text: 'belly' },
+                { type: 'field_input', name: 'B', text: '' }
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: STACK_COLOR,
+            tooltip: 'One step of a stack. Order matters, and a step may repeat.',
+            helpUrl: ''
+        }]);
+        // The second field is only emitted for the operators that take two
+        // operands, so the arity in the generated source always matches what
+        // the parser expects. `warp` is the only two-operand op today; asking
+        // the shared table rather than hardcoding that keeps it true if
+        // another one is added.
+        JS['otto_stack_op'] = blk => {
+            const op = blk.getFieldValue('OP');
+            const a = blk.getFieldValue('A').trim();
+            const b = blk.getFieldValue('B').trim();
+            const arity = operatorArity(op) ?? 1;
+            return arity > 1 ? `${op} ${a} ${b}` : `${op} ${a}`;
+        };
+
+        Blockly.defineBlocksWithJsonArray([{
+            type: 'otto_draw',
             message0: 'draw %1',
             args0: [{ type: 'field_input', name: 'NAME', text: 'square' }],
             message1: '%1',
@@ -588,30 +784,30 @@ export class BlocksEditor extends Component {
             nextStatement: null,
             colour: T_COLOR
         }]);
-        JS['aqui_draw'] = blk =>
+        JS['otto_draw'] = blk =>
             `draw ${blk.getFieldValue('NAME').trim()} {\n` +
             `${collectLinesUnique_(blk, 'STACK')}\n}\n`;
 
         Blockly.defineBlocksWithJsonArray([
-            { type: 'aqui_forward', message0: 'forward %1', args0: [{ type: 'input_value', name: 'D', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_backward', message0: 'backward %1', args0: [{ type: 'input_value', name: 'D', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_right', message0: 'right %1', args0: [{ type: 'input_value', name: 'A', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_left', message0: 'left %1', args0: [{ type: 'input_value', name: 'A', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_goto', message0: 'goto %1', args0: [{ type: 'input_value', name: 'P', check: 'Array' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_penup', message0: 'pen up', previousStatement: null, nextStatement: null, colour: T_COLOR },
-            { type: 'aqui_pendown', message0: 'pen down', previousStatement: null, nextStatement: null, colour: T_COLOR }
+            { type: 'otto_forward', message0: 'forward %1', args0: [{ type: 'input_value', name: 'D', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_backward', message0: 'backward %1', args0: [{ type: 'input_value', name: 'D', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_right', message0: 'right %1', args0: [{ type: 'input_value', name: 'A', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_left', message0: 'left %1', args0: [{ type: 'input_value', name: 'A', check: 'Number' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_goto', message0: 'goto %1', args0: [{ type: 'input_value', name: 'P', check: 'Array' }], previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_penup', message0: 'pen up', previousStatement: null, nextStatement: null, colour: T_COLOR },
+            { type: 'otto_pendown', message0: 'pen down', previousStatement: null, nextStatement: null, colour: T_COLOR }
         ]);
 
-        JS['aqui_forward'] = b => `forward ${JS.valueToCode(b, 'D', 0) || 0}`;
-        JS['aqui_backward'] = b => `backward ${JS.valueToCode(b, 'D', 0) || 0}`;
-        JS['aqui_right'] = b => `right ${JS.valueToCode(b, 'A', 0) || 0}`;
-        JS['aqui_left'] = b => `left ${JS.valueToCode(b, 'A', 0) || 0}`;
-        JS['aqui_goto'] = b => `goto ${JS.valueToCode(b, 'P', 0) || '[0,0]'}`;
-        JS['aqui_penup'] = () => 'penup';
-        JS['aqui_pendown'] = () => 'pendown';
+        JS['otto_forward'] = b => `forward ${JS.valueToCode(b, 'D', 0) || 0}`;
+        JS['otto_backward'] = b => `backward ${JS.valueToCode(b, 'D', 0) || 0}`;
+        JS['otto_right'] = b => `right ${JS.valueToCode(b, 'A', 0) || 0}`;
+        JS['otto_left'] = b => `left ${JS.valueToCode(b, 'A', 0) || 0}`;
+        JS['otto_goto'] = b => `goto ${JS.valueToCode(b, 'P', 0) || '[0,0]'}`;
+        JS['otto_penup'] = () => 'penup';
+        JS['otto_pendown'] = () => 'pendown';
 
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_param',
+            type: 'otto_param',
             message0: 'param %1 %2',
             args0: [
                 { type: 'field_input', name: 'NAME', text: 'size' },
@@ -621,13 +817,13 @@ export class BlocksEditor extends Component {
             nextStatement: null,
             colour: 160
         }]);
-        JS['aqui_param'] = blk => {
+        JS['otto_param'] = blk => {
             const n = blk.getFieldValue('NAME').trim();
             const v = JS.valueToCode(blk, 'VALUE', 0) || '0';
             return `param ${n} ${v}\n`;
         };
 
-        Blockly.Blocks['aqui_for'] = {
+        Blockly.Blocks['otto_for'] = {
             init() {
                 this.appendDummyInput()
                     .appendField('for')
@@ -646,7 +842,7 @@ export class BlocksEditor extends Component {
                 this.setColour(C_COLOR);
             }
         };
-        JS['aqui_for'] = blk => {
+        JS['otto_for'] = blk => {
             const varName = blk.getFieldValue('VAR').trim();
             const from = JS.valueToCode(blk, 'FROM', 0) || '0';
             const to = JS.valueToCode(blk, 'TO', 0) || '0';
@@ -655,13 +851,13 @@ export class BlocksEditor extends Component {
         };
 
         Blockly.defineBlocksWithJsonArray([{
-            type: 'aqui_param_get',
+            type: 'otto_param_get',
             message0: 'param %1',
             args0: [{ type: 'field_input', name: 'NAME', text: 'size' }],
             output: null,
             colour: 160
         }]);
-        JS['aqui_param_get'] = blk => {
+        JS['otto_param_get'] = blk => {
             const name = blk.getFieldValue('NAME') ? blk.getFieldValue('NAME').trim() : '';
             if (!name) {
                 return ['0', JS.ORDER_ATOMIC];
@@ -669,7 +865,7 @@ export class BlocksEditor extends Component {
             return [name, JS.ORDER_ATOMIC];
         };
 
-        JS['aqui_prop_expr'] = blk => {
+        JS['otto_prop_expr'] = blk => {
             const k = blk.getFieldValue('KEY').trim();
             let v = JS.valueToCode(blk, 'VAL', 0) || '""';
 
@@ -716,7 +912,7 @@ export class BlocksEditor extends Component {
 
         if (!JS.forBlock) JS.forBlock = Object.create(null);
         for (const k in JS) {
-            if (k.startsWith('aqui_')) {
+            if (k.startsWith('otto_')) {
                 JS.forBlock[k] = JS[k];
             }
         }
@@ -764,7 +960,7 @@ export class BlocksEditor extends Component {
     }
 
     /**
-     * Build blocks for AQUI source into any workspace.
+     * Build blocks for Otto source into any workspace.
      *
      * Split out from {@link BlocksEditor#syncFromCode} so a read-only
      * workspace elsewhere on the page — the Examples tab's preview — can
@@ -866,7 +1062,7 @@ export class BlocksEditor extends Component {
                 return b;
             }
             if (this._loopVars.has(expr.name) || this._paramsInScope.has(expr.name)) {
-                const b = ws.newBlock('aqui_param_get');
+                const b = ws.newBlock('otto_param_get');
                 b.setFieldValue(expr.name, 'NAME');
                 b.initSvg(); b.render();
                 return b;
@@ -879,7 +1075,7 @@ export class BlocksEditor extends Component {
 
         if (expr.type === 'param_ref') {
             const name = `${expr.name}.${expr.property}`;
-            const b = ws.newBlock('aqui_param_get');
+            const b = ws.newBlock('otto_param_get');
             b.setFieldValue(name, 'NAME');
             b.initSvg(); b.render();
             return b;
@@ -890,7 +1086,7 @@ export class BlocksEditor extends Component {
             b.setFieldValue('GET', 'MODE');
             b.setFieldValue('FROM_START', 'WHERE');
 
-            const listBlock = ws.newBlock('aqui_param_get');
+            const listBlock = ws.newBlock('otto_param_get');
             listBlock.setFieldValue(expr.name, 'NAME');
             listBlock.initSvg();
             listBlock.render();
@@ -1020,7 +1216,7 @@ export class BlocksEditor extends Component {
         if (!stmt) return null;
 
         if (stmt.type === 'param') {
-            const blk = ws.newBlock('aqui_param');
+            const blk = ws.newBlock('otto_param');
             blk.setFieldValue(stmt.name, 'NAME');
             const v = this.exprToBlock(stmt.value, ws);
             if (v) blk.getInput('VALUE').connection.connect(v.outputConnection);
@@ -1036,7 +1232,7 @@ export class BlocksEditor extends Component {
                 roundedrectangle: 'roundedrectangle'
             };
             const blockTypeName = typeToBlockType[originalType] || String(originalType || '').toLowerCase();
-            const blockType = `aqui_shape_${blockTypeName}`;
+            const blockType = `otto_shape_${blockTypeName}`;
             if (!window.Blockly.Blocks || !window.Blockly.Blocks[blockType]) {
                 console.warn('[BlocksEditor] Shape block not found:', blockType);
                 return null;
@@ -1050,8 +1246,8 @@ export class BlocksEditor extends Component {
             const params = stmt.params || {};
             Object.entries(params).forEach(([key, valExpr]) => {
                 const leafType = valExpr.type === 'boolean'
-                    ? 'aqui_prop_bool'
-                    : 'aqui_prop_expr';
+                    ? 'otto_prop_bool'
+                    : 'otto_prop_expr';
                 const leaf = ws.newBlock(leafType);
                 leaf.setFieldValue(key, 'KEY');
 
@@ -1090,12 +1286,12 @@ export class BlocksEditor extends Component {
         }
 
         if (stmt.type === 'boolean_operation') {
-            const blk = ws.newBlock(`aqui_${stmt.operation}`);
+            const blk = ws.newBlock(`otto_${stmt.operation}`);
             blk.setFieldValue(stmt.name, 'NAME');
 
             let prev = null;
             (stmt.shapes || []).forEach((s) => {
-                const leaf = ws.newBlock('aqui_ref');
+                const leaf = ws.newBlock('otto_ref');
                 leaf.setFieldValue('add', 'OP');
                 leaf.setFieldValue(s, 'TARGET');
                 leaf.initSvg(); leaf.render();
@@ -1109,14 +1305,137 @@ export class BlocksEditor extends Component {
             return blk;
         }
 
+        if (stmt.type === 'lift_operation') {
+            const blockType = `otto_${stmt.op}`;
+            if (!window.Blockly.Blocks || !window.Blockly.Blocks[blockType]) {
+                console.warn('[BlocksEditor] Lift block not found:', blockType);
+                return null;
+            }
+
+            const blk = ws.newBlock(blockType);
+            blk.setFieldValue(stmt.name, 'NAME');
+            blk.setFieldValue(stmt.source, 'SOURCE');
+            if (stmt.rail && blk.getField('RAIL')) {
+                blk.setFieldValue(stmt.rail, 'RAIL');
+            }
+
+            // The op's properties are the same key/value rows a shape block
+            // uses, so they round-trip through the same two leaf blocks.
+            let prev = null;
+            Object.entries(stmt.params || {}).forEach(([key, valExpr]) => {
+                const leafType = valExpr.type === 'boolean' ? 'otto_prop_bool' : 'otto_prop_expr';
+                const leaf = ws.newBlock(leafType);
+                leaf.setFieldValue(key, 'KEY');
+
+                if (valExpr.type === 'boolean') {
+                    leaf.setFieldValue(valExpr.value ? 'TRUE' : 'FALSE', 'VAL');
+                } else {
+                    let child = this.exprToBlock(valExpr, ws);
+                    if (!child) {
+                        child = ws.newBlock('math_number');
+                        child.setFieldValue('0', 'NUM');
+                        child.initSvg();
+                        child.render();
+                    }
+                    const valInput = leaf.getInput('VAL');
+                    if (valInput && valInput.connection && child.outputConnection) {
+                        valInput.connection.connect(child.outputConnection);
+                    }
+                }
+
+                leaf.initSvg();
+                leaf.render();
+
+                const propsInput = blk.getInput('PROPS');
+                if (propsInput && propsInput.connection) {
+                    if (prev && prev.nextConnection) {
+                        prev.nextConnection.connect(leaf.previousConnection);
+                    } else {
+                        propsInput.connection.connect(leaf.previousConnection);
+                    }
+                    prev = leaf;
+                }
+            });
+
+            blk.initSvg(); blk.render();
+            return blk;
+        }
+
+        if (stmt.type === 'curve_declaration' || stmt.type === 'stack_operation') {
+            const isCurve = stmt.type === 'curve_declaration';
+            const blockType = isCurve ? 'otto_curve' : 'otto_stack';
+            if (!window.Blockly.Blocks || !window.Blockly.Blocks[blockType]) {
+                console.warn('[BlocksEditor] Stack block not found:', blockType);
+                return null;
+            }
+
+            const blk = ws.newBlock(blockType);
+            blk.setFieldValue(stmt.name, 'NAME');
+            if (isCurve) {
+                blk.setFieldValue(stmt.kind, 'KIND');
+            } else {
+                blk.setFieldValue(stmt.source, 'SOURCE');
+            }
+
+            // Append into PROPS, keeping the written order. For a stack that
+            // order is not cosmetic: the operator rows are a pipeline, and
+            // reordering them changes the form.
+            let prev = null;
+            const append = (leaf) => {
+                leaf.initSvg();
+                leaf.render();
+                const propsInput = blk.getInput('PROPS');
+                if (!propsInput || !propsInput.connection) return;
+                if (prev && prev.nextConnection) {
+                    prev.nextConnection.connect(leaf.previousConnection);
+                } else {
+                    propsInput.connection.connect(leaf.previousConnection);
+                }
+                prev = leaf;
+            };
+
+            Object.entries(stmt.params || {}).forEach(([key, valExpr]) => {
+                const leafType = valExpr.type === 'boolean' ? 'otto_prop_bool' : 'otto_prop_expr';
+                const leaf = ws.newBlock(leafType);
+                leaf.setFieldValue(key, 'KEY');
+                if (valExpr.type === 'boolean') {
+                    leaf.setFieldValue(valExpr.value ? 'TRUE' : 'FALSE', 'VAL');
+                } else {
+                    let child = this.exprToBlock(valExpr, ws);
+                    if (!child) {
+                        child = ws.newBlock('math_number');
+                        child.setFieldValue('0', 'NUM');
+                        child.initSvg();
+                        child.render();
+                    }
+                    const valInput = leaf.getInput('VAL');
+                    if (valInput && valInput.connection && child.outputConnection) {
+                        valInput.connection.connect(child.outputConnection);
+                    }
+                }
+                append(leaf);
+            });
+
+            (stmt.operations || []).forEach(({ op, operands }) => {
+                const leaf = ws.newBlock('otto_stack_op');
+                leaf.setFieldValue(op, 'OP');
+                leaf.setFieldValue(String(operands[0]?.value ?? ''), 'A');
+                leaf.setFieldValue(operands.length > 1 ? String(operands[1].value) : '', 'B');
+                append(leaf);
+            });
+
+            blk.initSvg(); blk.render();
+            return blk;
+        }
+
         if (stmt.type === 'draw') {
-            const blk = ws.newBlock('aqui_draw');
+            const blk = ws.newBlock('otto_draw');
             blk.setFieldValue(stmt.name, 'NAME');
             const bodyInput = blk.getInput('STACK') || blk.getInput('COMMANDS');
 
             let prev = null;
             (stmt.commands || []).forEach(cmd => {
-                const leaf = ws.newBlock(`aqui_${cmd.command}`);
+                const leaf = ws.newBlock(`otto_${cmd.command}`);
                 const sock = { forward: 'D', backward: 'D', right: 'A', left: 'A' }[cmd.command];
                 if (sock) {
                     const child = this.exprToBlock(cmd.value, ws);
@@ -1134,7 +1453,7 @@ export class BlocksEditor extends Component {
         }
 
         if (stmt.type === 'for_loop') {
-            const blk = ws.newBlock('aqui_for');
+            const blk = ws.newBlock('otto_for');
             blk.setFieldValue(stmt.iterator, 'VAR');
 
             const fromExpr = this.exprToBlock(stmt.start, ws);
@@ -1168,7 +1487,7 @@ export class BlocksEditor extends Component {
         }
 
         if (stmt.type === 'draw_command') {
-            const leaf = ws.newBlock(`aqui_${stmt.command}`);
+            const leaf = ws.newBlock(`otto_${stmt.command}`);
             const sock = { forward: 'D', backward: 'D', right: 'A', left: 'A' }[stmt.command];
             if (sock) {
                 const child = this.exprToBlock(stmt.value, ws);
@@ -1269,7 +1588,7 @@ export class BlocksEditor extends Component {
         const blocks = this.workspace.getAllBlocks(false) || [];
         for (const block of blocks) {
             if (!block || !block.type) continue;
-            if (!block.type.startsWith('aqui_shape_')) continue;
+            if (!block.type.startsWith('otto_shape_')) continue;
             const name = block.getFieldValue('NAME');
             const dataId = block.data ? String(block.data) : '';
             if (targets.has(name) || targets.has(dataId)) {

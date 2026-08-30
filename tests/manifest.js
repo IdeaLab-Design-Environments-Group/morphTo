@@ -19,5 +19,21 @@ export const TEST_MODULES = [
     './unit/bindings.test.js',
     './unit/shell-boot.test.js',
     './unit/blocks-editor.test.js',
-    './unit/resource-hygiene.test.js'
+    './unit/resource-hygiene.test.js',
+    './unit/shape-registry.test.js',
+    './unit/profile.test.js',
+    './unit/lift.test.js',
+    './unit/sweep-join.test.js',
+    './unit/form3d-integration.test.js',
+    './unit/assemble.test.js',
+    './unit/viewport3d.test.js',
+    './unit/viewport3d-gl.test.js',
+    // Free-form profile stacks (src/stackform/). Separate from the form3d
+    // suites above because the two pipelines guarantee different things: a
+    // lift flattens, a stack does not.
+    './unit/stackform-curves.test.js',
+    './unit/stackform-ops.test.js',
+    './unit/stackform-stack.test.js',
+    './unit/stackform-display.test.js',
+    './unit/stackform-stl.test.js'
 ];

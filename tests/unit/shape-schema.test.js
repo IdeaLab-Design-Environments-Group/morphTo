@@ -61,7 +61,7 @@ test('position-anchored defaults: center/origin shapes land on the drop position
     assertEqual(line.x2, 140);
 });
 
-test('AQUI snake_case aliases resolve', () => {
+test('Otto snake_case aliases resolve', () => {
     const gear = ShapeRegistry.create('gear', { x: 0, y: 0 }, { pitch_diameter: 42, pressure_angle: 25 });
     assertEqual(gear.pitchDiameter, 42);
     assertEqual(gear.pressureAngle, 25);
@@ -195,7 +195,7 @@ test('a decorated shape still satisfies the Shape interface exporters rely on', 
 // path it owns, so its bounds are an estimate and its geometry path is the
 // enclosing rectangle. These tests pin that documented behaviour down.
 
-test('text: defaults, and AQUI params land on the shape', () => {
+test('text: defaults, and Otto params land on the shape', () => {
     const dflt = ShapeRegistry.create('text', { x: 10, y: 20 }, {});
     assertEqual(dflt.centerX, 10);
     assertEqual(dflt.centerY, 20);
@@ -316,7 +316,7 @@ test('text: render draws the string with fillText, centred on the position', () 
     assertEqual(calls.filter(c => c[0] === 'fillText').length, 0, 'empty text draws nothing');
 });
 
-test('text: AQUI shape text reaches the store with its string intact', async () => {
+test('text: Otto shape text reaches the store with its string intact', async () => {
     const { SceneState } = await import('../../src/core/SceneState.js');
     const { CodeRunner } = await import('../../src/programming/CodeRunner.js');
     ShapeRegistry.resetIdCounters();

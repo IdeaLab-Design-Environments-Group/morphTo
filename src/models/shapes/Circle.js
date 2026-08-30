@@ -18,6 +18,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { ProfileError, buildProfile, circleArcs } from './profileSupport.js';
 
 /**
  * Opaque black fill used exclusively for hit-testing.
@@ -103,4 +104,31 @@ export class Circle extends Shape {
     toGeometryPath() {
         return GeoPath.circle(new GeoVec(this.centerX, this.centerY), this.radius);
     }
+
+    /**
+     * Four quarter arcs, closed and exact.
+     *
+     * Four is the smallest count that keeps every arc under a half turn,
+     * which is what makes `arcSweep()` unambiguous. No sampling: a revolved
+     * circle profile is a true sphere or torus section, not a polygon.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `degenerate` for a zero radius.
+     */
+    toProfile() {
+        if (!(this.radius > 0)) {
+            throw new ProfileError(
+                'degenerate',
+                `Circle "${this.id}" has radius ${this.radius}`,
+                this.type
+            );
+        }
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: circleArcs(this.centerX, this.centerY, this.radius, 'edge'),
+            closed: true
+        });
+    }
+
 }

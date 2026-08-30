@@ -54,6 +54,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -77,7 +78,7 @@ const AVG_CHAR_WIDTH_RATIO = 0.6;
  *
  * Bindable properties: {@code centerX}, {@code centerY}, {@code fontSize}.  The string
  * itself and the font family are not bindable (bindings evaluate to numbers), and neither
- * are the fill flags -- they exist as schema properties so that the fill declared in AQUI
+ * are the fill flags -- they exist as schema properties so that the fill declared in Otto
  * (`fillColor: "#ffffff"`) survives construction and reaches ShapesPass, which reads
  * `shape.fill` / `shape.fillColor` off the shape when building the canvas style.  Without
  * them ShapesPass sets `fillStyle = 'transparent'` and the label renders invisibly.
@@ -93,7 +94,7 @@ export class Text extends Shape {
         text: { type: 'string', default: 'Text', label: 'Text' },
         fontSize: { type: 'number', default: 16, bindable: true, min: 1, aliases: ['font_size'], label: 'Font Size' },
         fontFamily: { type: 'string', default: 'Arial', aliases: ['font_family'], label: 'Font Family' },
-        // Not bindable; present so AQUI's fill declarations survive construction.
+        // Not bindable; present so Otto's fill declarations survive construction.
         fill: { type: 'boolean', default: true, label: 'Fill' },
         fillColor: { type: 'color', default: '#000000', aliases: ['fill_color'], label: 'Fill Color' }
     };
@@ -209,4 +210,29 @@ export class Text extends Shape {
             { x: cx - w, y: cy + h }
         ];
     }
+
+    /**
+     * The estimated bounding rectangle as four lines — NOT the glyph
+     * outlines.
+     *
+     * Marked `exact: false`, and that flag is the whole point: the box is a
+     * stand-in (the letterforms live inside the font and no font parser is
+     * available), and its width comes from a character count, not real
+     * metrics. `deviation` is 0 because the four lines reproduce that box
+     * perfectly; it says nothing about how far the box is from the letters,
+     * which is not measurable here. Anything lifting a text profile is
+     * extruding a rectangle and must decide whether that is acceptable.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(this.getPoints(), true, 'bounds'),
+            closed: true,
+            exact: false
+        });
+    }
+
 }

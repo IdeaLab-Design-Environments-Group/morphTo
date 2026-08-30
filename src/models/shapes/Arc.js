@@ -29,6 +29,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { ProfileError, arcsFromDegrees, buildProfile } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  Assigned to the open arc path to create an
@@ -140,4 +141,54 @@ export class Arc extends Shape {
 
         return GeoPath.fromPoints(points, false);
     }
+
+    /**
+     * ONE arc segment, exact — the whole reason this method exists.
+     *
+     * {@link Arc#toGeometryPath} samples this same arc into 32 line segments,
+     * which is right for drawing and hit-testing and wrong for lifting: a
+     * revolved 32-gon is a faceted cone that still looks plausible on screen.
+     * Here `centerX`/`centerY`/`radius`/`startAngle`/`endAngle` are read
+     * straight off the shape and survive as an arc at any radius.
+     *
+     * ANGLES: the model stores DEGREES (`SCHEMA.startAngle` carries
+     * `unit: 'deg'`); a Profile arc holds RADIANS. `arcsFromDegrees` is the
+     * single conversion point. A sweep past a full turn cannot fit in one
+     * `ArcSeg` and is split into equal chunks of at most 360 degrees.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `degenerate` for a zero radius or a zero
+     *   sweep, neither of which has a lift.
+     */
+    toProfile() {
+        if (!(this.radius > 0)) {
+            throw new ProfileError(
+                'degenerate',
+                `Arc "${this.id}" has radius ${this.radius}`,
+                this.type
+            );
+        }
+        if (this.endAngle === this.startAngle) {
+            throw new ProfileError(
+                'degenerate',
+                `Arc "${this.id}" sweeps no angle (start and end are both ${this.startAngle} deg)`,
+                this.type
+            );
+        }
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: arcsFromDegrees(
+                this.centerX,
+                this.centerY,
+                this.radius,
+                this.startAngle,
+                this.endAngle,
+                'edge'
+            ),
+            closed: false
+        });
+    }
+
 }

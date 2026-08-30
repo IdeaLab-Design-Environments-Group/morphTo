@@ -232,7 +232,7 @@ export class Application {
         this.propertiesPanel.mount();
 
         // AI Fabrication Coach: a top-right toolbar button toggles a flyover
-        // that reads the active scene through SceneContext and the current AQUI
+        // that reads the active scene through SceneContext and the current Otto
         // source from the code editor.
         if (coachButton) {
             this.coachPanel = new CoachPanel(this.context, {

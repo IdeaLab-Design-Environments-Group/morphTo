@@ -1,7 +1,7 @@
 /**
  * CodeEditor - Text-based programming interface for Otto using CodeMirror
  *
- * Provides a code editor with syntax highlighting for Otto/Aqui language.
+ * Provides a code editor with syntax highlighting for the Otto language.
  * Styled with beige background and black text (solarized light).
  */
 import { Component } from './Component.js';
@@ -131,7 +131,7 @@ export class CodeEditor extends Component {
     }
 
     /**
-     * Initialize CodeMirror with Aqui syntax mode
+     * Initialize CodeMirror with Otto syntax mode
      */
     initCodeMirror(textarea) {
         if (typeof CodeMirror === 'undefined') {
@@ -144,9 +144,9 @@ export class CodeEditor extends Component {
             return;
         }
 
-        // AQUI syntax mode — the rule table is copied verbatim from morphTo's
+        // Otto syntax mode — the rule table is copied verbatim from morphTo's
         // setupCodeMirror() so token colouring is pixel-identical.
-        CodeMirror.defineSimpleMode('aqui', {
+        CodeMirror.defineSimpleMode('otto', {
             start: [
                 {regex: /\/\/.*/, token: 'comment'},
                 {regex: /\b(?:shape|param|layer|transform|add|rotate|scale|position|if|else|for|from|to|step|def|return|union|difference|intersection|draw|forward|backward|right|left|goto|penup|pendown|fill|fillColor|color|strokeColor|strokeWidth|opacity|constraints|coincident|distance|horizontal|vertical)\b/, token: 'keyword'},
@@ -167,7 +167,7 @@ export class CodeEditor extends Component {
 
         // Construction options match morphTo's CodeMirror.fromTextArea call exactly.
         this.editor = CodeMirror.fromTextArea(textarea, {
-            mode: 'aqui',
+            mode: 'otto',
             theme: 'default',
             lineNumbers: true,
             autoCloseBrackets: true,

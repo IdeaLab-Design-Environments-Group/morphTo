@@ -8,6 +8,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { DEFAULT_PROFILE_TOLERANCE, ProfileError, buildProfile, fitPath } from './profileSupport.js';
 
 const HIT_TEST_FILL = new GeoFill(new GeoColor(0, 0, 0, 1));
 const HIT_TEST_STROKE = new GeoStroke(new GeoColor(0, 0, 0, 1), false, 6, 'centered', 'round', 'round', 4);
@@ -385,4 +386,45 @@ export class PathShape extends Shape {
 
         return new GeoPath(anchors, closed);
     }
+
+    /**
+     * The path's own segments: straight ones kept exactly, curved ones fitted
+     * with biarcs.
+     *
+     * A segment with no bezier handles IS a line and is recognised as one, so
+     * a polyline path comes back `exact: true` with zero deviation. A curved
+     * segment has no exact line-and-arc form, so it is fitted to within
+     * τ_profile and the profile reports `exact: false` with the measured
+     * error — the approximation is never silent.
+     *
+     * @param {Object} [options]
+     * @param {number} [options.tolerance] - τ_profile, mm.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `degenerate` for a path with under two
+     *   distinct points.
+     */
+    toProfile({ tolerance = DEFAULT_PROFILE_TOLERANCE } = {}) {
+        if (!Array.isArray(this.points) || this.points.length < 2) {
+            throw new ProfileError(
+                'degenerate',
+                `Path "${this.id}" has fewer than two points`,
+                this.type
+            );
+        }
+
+        const { segments, exact, deviation } = fitPath(this.toGeometryPath(), {
+            tolerance,
+            region: 'edge'
+        });
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments,
+            closed: !!this.closed,
+            exact,
+            deviation
+        });
+    }
+
 }

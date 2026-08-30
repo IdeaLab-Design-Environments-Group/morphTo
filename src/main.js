@@ -17,7 +17,12 @@ let app = null;
 /** @type {MorphToShell|null} */
 let shell = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+/**
+ * Construct the Application, mount it, then wire morphTo's chrome.
+ *
+ * @returns {void}
+ */
+function boot() {
     try {
         app = new Application();
         app.init(MORPHTO_ELEMENT_IDS);
@@ -45,6 +50,21 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error initializing application:', error);
         console.error(error.stack);
     }
-});
+}
+
+// Boot on DOMContentLoaded only if it is still ahead of us. A module script
+// is deferred, so it normally evaluates before that event -- but "normally"
+// is not "always": with a module graph this wide the parser can finish and
+// the event can fire while the graph is still resolving, and a listener
+// registered afterwards never runs. That failure is silent and total: the
+// static chrome renders (it is wired by classic scripts, which are not
+// affected), while the engine is never constructed at all -- no CanvasView,
+// so the canvas keeps its untouched 300x150 backing store and paints
+// nothing.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}
 
 export { app, shell };

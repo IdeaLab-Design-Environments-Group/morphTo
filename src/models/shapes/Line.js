@@ -20,6 +20,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Thick opaque black stroke used exclusively for hit-testing open paths.
@@ -111,4 +112,22 @@ export class Line extends Shape {
             new GeoVec(this.x2, this.y2)
         ], false);
     }
+
+    /**
+     * One line segment, open and exact. See {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(
+                [{ x: this.x1, y: this.y1 }, { x: this.x2, y: this.y2 }],
+                false,
+                'edge'
+            ),
+            closed: false
+        });
+    }
+
 }

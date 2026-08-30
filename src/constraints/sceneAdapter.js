@@ -86,7 +86,7 @@ export function createSceneAdapter(scene, { onRedraw } = {}) {
         refresh() {
             adapter.shapes.clear();
             for (const shape of scene.shapeStore.getAll()) {
-                // Keyed by id: AQUI shape names become ids on the way in, and
+                // Keyed by id: Otto shape names become ids on the way in, and
                 // constraints reference shapes by that same name.
                 adapter.shapes.set(String(shape.id), shapeView(shape));
             }

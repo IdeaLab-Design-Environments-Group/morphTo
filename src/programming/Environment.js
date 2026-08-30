@@ -4,6 +4,7 @@ class ScopeFrame {
     this.parent = parent;
     this.parameters = new Map();
     this.shapes = new Map();
+    this.solids = new Map();
     this.layers = new Map();
     this.functions = new Map();
   }
@@ -56,6 +57,47 @@ class ScopeFrame {
       return this.parent.hasShape(name);
     }
     return false;
+  }
+
+  // Solid operations (results of the 3D lift ops)
+  getSolid(name) {
+    if (this.solids.has(name)) {
+      return this.solids.get(name);
+    }
+    if (this.parent) {
+      return this.parent.getSolid(name);
+    }
+    throw new Error(`Solid not found: ${name}`);
+  }
+
+  setSolid(name, solid) {
+    this.solids.set(name, solid);
+  }
+
+  hasSolid(name) {
+    if (this.solids.has(name)) {
+      return true;
+    }
+    if (this.parent) {
+      return this.parent.hasSolid(name);
+    }
+    return false;
+  }
+
+  getAllSolids() {
+    const solids = new Map();
+
+    if (this.parent) {
+      for (const [name, solid] of this.parent.getAllSolids()) {
+        solids.set(name, solid);
+      }
+    }
+
+    for (const [name, solid] of this.solids) {
+      solids.set(name, solid);
+    }
+
+    return solids;
   }
 
   // Layer operations
@@ -256,6 +298,28 @@ export class Environment {
   // Backward compatibility: direct access to all shapes
   get shapes() {
     return this.globalScope.getAllShapes();
+  }
+
+  /**
+   * Register a lifted solid. Like {@link Environment#createShapeWithName},
+   * solids always land in the global scope: a solid built inside a function
+   * body is still part of the document and must outlive the call frame.
+   * @param {string} name
+   * @param {Object} solid
+   * @returns {Object} The solid.
+   */
+  addSolid(name, solid) {
+    this.globalScope.setSolid(name, solid);
+    return solid;
+  }
+
+  getSolid(name) {
+    return this.currentFrame.getSolid(name);
+  }
+
+  /** @returns {Map<string, Object>} Every solid, innermost scope winning. */
+  get solids() {
+    return this.globalScope.getAllSolids();
   }
 
   // Layer operations

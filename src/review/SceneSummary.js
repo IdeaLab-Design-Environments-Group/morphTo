@@ -7,7 +7,7 @@
  * rendering suitable for a prompt.
  *
  * It is deliberately **pure and DOM-free**: it takes plain data (resolved
- * shapes, parameters, optional AQUI code) and returns plain data, so it can be
+ * shapes, parameters, optional Otto code) and returns plain data, so it can be
  * unit-tested under Node without a canvas or a network. Prompt framing and the
  * Gemini call live in {@link module:review/FabricationCoach}.
  */
@@ -56,7 +56,7 @@ function describeBinding(binding, paramNames) {
  *   `shapeStore.getResolved()`.
  * @param {Array<Object>} [input.parameters]  Parameter instances / plain
  *   `{ id, name, value, min, max }` objects. Typically `parameterStore.getAll()`.
- * @param {string} [input.code]  Current AQUI source, if the user authored any.
+ * @param {string} [input.code]  Current Otto source, if the user authored any.
  * @returns {{unit: string, parameters: Array, shapes: Array, code: ?string,
  *   counts: {shapes: number, parameters: number}}}
  */
@@ -158,7 +158,7 @@ export function sceneSummaryToText(summary) {
     }
 
     if (summary.code) {
-        lines.push('', 'AQUI source:', summary.code);
+        lines.push('', 'Otto source:', summary.code);
     }
 
     return lines.join('\n');

@@ -3,6 +3,7 @@
  * ported from the keyboard half of the old CanvasRenderer:
  *
  *   E             toggle edge-selection mode
+ *   ;             toggle grid visibility
  *   Escape        exit edge mode / cancel path drawing / exit handle editing /
  *                 deselect all (in that priority order)
  *   Enter         finish an in-progress path
@@ -81,12 +82,15 @@ export class KeyboardShortcutController {
 
         const shapeStore = this.context.shapeStore;
 
-        // ';': toggle grid visibility. Routed through the toolbar button so the
-        // button's .active state stays in sync, as morphTo's handleKeyDown does
-        // via toggleGrid() + updateGridButtonState().
+        // ';': toggle grid visibility. This is the ONLY way to toggle the grid
+        // -- there is no toolbar button any more -- so it flips the flag
+        // directly rather than routing a click through the DOM.
         if (e.key === ';' && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            document.getElementById('grid-toggle-btn')?.click();
+            if (this.interaction) {
+                this.interaction.showGrid = !this.interaction.showGrid;
+                this.view?.render();
+            }
             return;
         }
 

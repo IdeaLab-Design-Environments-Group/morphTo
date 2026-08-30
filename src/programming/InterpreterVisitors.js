@@ -2,6 +2,22 @@
 // This file contains the visitor implementations used by the main interpreter
 
 import { booleanOperator } from './BooleanOperators.js';
+import {
+  LiftStatementError,
+  buildOpRecord,
+  buildSolidPayload,
+  collectIdentifiers,
+  hasLiftKernel,
+  profilesOfShape
+} from './LiftSupport.js';
+import { CURVE_KINDS, CurveError, compileCurve } from '../stackform/curves.js';
+import {
+  DEFAULT_LAYERS,
+  StackError,
+  compileStack,
+  contourFromProfile,
+  sampleStack
+} from '../stackform/evaluate.js';
 
 // Base Visitor class
 export class BaseVisitor {
@@ -172,9 +188,14 @@ export class ShapeVisitor extends BaseVisitor {
     }
 
     const params = {};
+    // The named parameters this shape's own expressions read. A 3D op lifting
+    // this shape depends on them transitively, and LiftVisitor unions them in
+    // so a solid's `dependsOn` is the whole edge set, not just its own block.
+    const dependsOn = new Set();
     for (const [key, expr] of Object.entries(node.params)) {
       const evaluatedValue = this.interpreter.evaluateExpression(expr);
       params[key] = this.interpreter.processShapeParameter(key, evaluatedValue);
+      collectIdentifiers(expr, dependsOn);
     }
     
     if (node.shapeType === 'donut') {
@@ -191,6 +212,7 @@ export class ShapeVisitor extends BaseVisitor {
     
     this.interpreter.processShapeFillParameters(node.shapeType, params);
     const shape = this.interpreter.env.createShapeWithName(node.shapeType, shapeName, params);
+    shape.dependsOn = Array.from(dependsOn).sort();
     console.log(`✅ Created shape: ${shapeName} (${node.shapeType})`);
     return shape;
   }
@@ -250,6 +272,286 @@ export class BooleanOperationVisitor extends BaseVisitor {
     this.interpreter.env.addShape(name, result);
     return result;
   }
+}
+
+// Lift Visitor - the 3D ops (extrude / revolve / sweep)
+//
+// Mirrors BooleanOperationVisitor: resolve the named operand shapes out of the
+// environment, evaluate the block's expressions, run the operation, register
+// the result under the statement's name. The difference is where the result
+// lands — a lift produces a mesh, not a 2D shape, so it goes to `env.solids`
+// and the operand shape is NOT consumed: a profile can feed several ops, and
+// it stays on the canvas as the 2D drawing it is.
+export class LiftVisitor extends BaseVisitor {
+  visit(node) {
+    const { op, name, source, rail } = node;
+    const interpreter = this.interpreter;
+
+    // Evaluate the block through the ordinary expression path, so op
+    // parameters read named parameters exactly as every other statement does.
+    // Those same reads are the op's DAG edges, recorded below.
+    const params = {};
+    const dependsOn = new Set();
+    for (const [key, expr] of Object.entries(node.params)) {
+      params[key] = interpreter.evaluateExpression(expr);
+      collectIdentifiers(expr, dependsOn);
+    }
+
+    const tolerance = params.tolerance === undefined
+      ? interpreter.documentTolerance
+      : Number(params.tolerance);
+    if (!(tolerance > 0) || !Number.isFinite(tolerance)) {
+      throw new Error(
+        `Error in ${op} ${name}: tolerance must be a positive number, got ${JSON.stringify(params.tolerance)}`
+      );
+    }
+
+    try {
+      // A profile is fitted against a quarter of the budget, leaving the lift
+      // the other three quarters — the split form3d/lift/common.js assumes.
+      const profileOptions = { tolerance: tolerance / 4 };
+      const { profiles, warnings, shapeDeps } = this.resolveProfiles(source, profileOptions);
+      shapeDeps.forEach(d => dependsOn.add(d));
+
+      const rails = [];
+      if (rail) {
+        const railResult = this.resolveProfiles(rail, profileOptions);
+        rails.push(...railResult.profiles);
+        railResult.shapeDeps.forEach(d => dependsOn.add(d));
+        warnings.push(...railResult.warnings);
+      }
+
+      const opId = `${op}_${name}`;
+      const opRecord = buildOpRecord(op, params, { opName: name, opId, tolerance, rails });
+      const { key, payload } = buildSolidPayload({
+        op, profiles, opRecord, tolerance, opId,
+        cache: interpreter.meshCache
+      });
+
+      const solid = {
+        type: 'solid',
+        op,
+        name,
+        id: opId,
+        source,
+        rail,
+        params,
+        tolerance,
+        cacheKey: key,
+        dependsOn: Array.from(dependsOn).sort(),
+        profileIds: profiles.map(p => p.id),
+        sourceWarnings: warnings,
+        ...payload
+      };
+
+      interpreter.env.addSolid(name, solid);
+      return solid;
+    } catch (error) {
+      if (error instanceof LiftStatementError || error.name === 'LiftError') {
+        const where = error.segIndex === null || error.segIndex === undefined
+          ? ''
+          : ` (segment ${error.segIndex})`;
+        throw new Error(`Error in ${op} ${name}: ${error.message}${where}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Profiles for a named shape, failing with the statement's own vocabulary
+   * rather than leaking "Shape not found" from the environment.
+   * @private
+   */
+  resolveProfiles(shapeName, options) {
+    let shapeRecord;
+    try {
+      shapeRecord = this.interpreter.env.getShape(shapeName);
+    } catch {
+      shapeRecord = null;
+    }
+    if (!shapeRecord) {
+      throw new LiftStatementError('source-not-found', `Shape not found: ${shapeName}`);
+    }
+    return {
+      ...profilesOfShape(shapeRecord, shapeName, options),
+      shapeDeps: shapeRecord.dependsOn || []
+    };
+  }
+
+  /** @returns {boolean} Whether a kernel exists for this op in this build. */
+  static supports(op) {
+    return hasLiftKernel(op);
+  }
+}
+
+// Curve Visitor - a shaping curve declaration
+//
+// `curve belly bezier { p0: 0.6 … }` records a spec, it does not compile one.
+// Compilation is deferred to the stack that uses it for two reasons: a curve
+// nobody uses should cost nothing, and the combinators (`add`, `multiply`,
+// `compose`) name other curves, so resolution has to happen somewhere that
+// can see the whole document rather than only what was declared above.
+//
+// The spec stored is plain data, which is what lets it take part in the
+// content-addressed mesh cache unchanged.
+export class CurveVisitor extends BaseVisitor {
+  visit(node) {
+    const { name, kind, params: paramNodes } = node;
+    const interpreter = this.interpreter;
+
+    const params = {};
+    const dependsOn = new Set();
+    for (const [key, expr] of Object.entries(paramNodes)) {
+      params[key] = interpreter.evaluateExpression(expr);
+      collectIdentifiers(expr, dependsOn);
+    }
+
+    if (!CURVE_KINDS.includes(kind)) {
+      throw new Error(
+        `Error in curve ${name}: unknown curve kind "${kind}". Known: ${CURVE_KINDS.join(', ')}`
+      );
+    }
+
+    const record = {
+      type: 'curve',
+      name,
+      kind,
+      spec: { kind, ...params },
+      dependsOn: Array.from(dependsOn).sort()
+    };
+    interpreter.curves.set(name, record);
+    return record;
+  }
+}
+
+// Stack Visitor - the free-form profile stack (src/stackform/)
+//
+// The sibling of LiftVisitor, and deliberately not part of it: a lift emits a
+// developable Mesh that flattens into a sheet, a stack emits a LayerForm that
+// does not. Keeping them apart is what stops a free-form body being offered
+// to a laser cutter. It extends LiftVisitor only to share resolveProfiles().
+export class StackVisitor extends LiftVisitor {
+  visit(node) {
+    const { name, source, params: paramNodes, operations } = node;
+    const interpreter = this.interpreter;
+
+    const params = {};
+    const dependsOn = new Set();
+    for (const [key, expr] of Object.entries(paramNodes)) {
+      params[key] = interpreter.evaluateExpression(expr);
+      collectIdentifiers(expr, dependsOn);
+    }
+
+    const opId = `stack_${name}`;
+    const record = {
+      type: 'stack',
+      name,
+      source,
+      params,
+      operations,
+      dependsOn: Array.from(dependsOn).sort()
+    };
+    interpreter.stacks.set(name, record);
+
+    try {
+      const height = params.height === undefined ? 100 : Number(params.height);
+      const layers = params.layers === undefined ? DEFAULT_LAYERS : Number(params.layers);
+
+      const contoursAt = this.compileNamedStack(name, new Set());
+      const form = sampleStack(contoursAt, { height, layers, opId });
+
+      const solid = {
+        type: 'solid',
+        op: 'stack',
+        name,
+        id: opId,
+        source,
+        params,
+        // Read by anything downstream that might offer to cut this flat.
+        // A stack is free-form; it does not flatten. See stackform/LayerForm.js.
+        developable: false,
+        dependsOn: record.dependsOn,
+        form,
+        stats: form.stats(),
+        warnings: form.warnings
+      };
+      record.solid = solid;
+      interpreter.env.addSolid(name, solid);
+      return solid;
+    } catch (error) {
+      if (error?.name === 'StackError' || error?.name === 'CurveError') {
+        throw new Error(`Error in stack ${name}: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Compile a named stack to `t -> Contour[]`, guarding against cycles.
+   *
+   * Expanding by recursion with no guard turns a stack that names itself into
+   * a stack overflow rather than a diagnosis. `active` is the chain
+   * of names currently being compiled, which turns that into a typed error
+   * naming the actual loop.
+   *
+   * @private
+   */
+  compileNamedStack(name, active) {
+    const interpreter = this.interpreter;
+    if (active.has(name)) {
+      throw new StackError('cyclic-stack',
+        `stack "${name}" refers to itself (${[...active, name].join(' -> ')})`);
+    }
+    const record = interpreter.stacks.get(name);
+    if (!record) throw new StackError('stack-not-found', `Stack not found: ${name}`);
+
+    const nextActive = new Set(active).add(name);
+    const { profiles } = this.resolveProfiles(record.source, {
+      tolerance: interpreter.documentTolerance / 4
+    });
+    if (!profiles.length) {
+      throw new StackError('empty-source', `Shape "${record.source}" produced no profile`);
+    }
+
+    const base = profiles.map(p => contourFromProfile(p));
+    const ctx = {
+      resolveCurve: (curveName) => this.compileNamedCurve(curveName, new Set()),
+      resolveStack: (stackName) => this.compileNamedStack(stackName, nextActive)
+    };
+
+    return compileStack({
+      base,
+      operations: operationsToSpec(record.operations)
+    }, ctx, `stack_${name}`);
+  }
+
+  /**
+   * Compile a named curve, guarding against cycles through the combinators.
+   * @private
+   */
+  compileNamedCurve(name, active) {
+    if (active.has(name)) {
+      throw new CurveError('cyclic-curve',
+        `curve "${name}" refers to itself (${[...active, name].join(' -> ')})`);
+    }
+    const record = this.interpreter.curves.get(name);
+    if (!record) throw new CurveError('curve-not-found', `Curve not found: ${name}`);
+    const nextActive = new Set(active).add(name);
+    return compileCurve(record.spec, (operand) => this.compileNamedCurve(operand, nextActive));
+  }
+}
+
+/**
+ * Turn the parser's operand records into the evaluator's plain descriptors:
+ * a name stays a string, a literal stays a number.
+ */
+function operationsToSpec(operations) {
+  return (operations ?? []).map(({ op, operands }) => ({
+    op,
+    // A name arrives as a string and a literal as a number; the evaluator
+    // tells them apart by typeof, so the tagged form is not needed past here.
+    operands: operands.map(o => o.value)
+  }));
 }
 
 // Function Visitor

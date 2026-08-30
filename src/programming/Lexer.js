@@ -106,7 +106,21 @@ export class Lexer {
       'union': 'UNION',
       'difference': 'DIFFERENCE',
       'intersection': 'INTERSECTION',
-      
+
+      // 3D lift operations. `from` is already a keyword (for-loops use it),
+      // so only the op names and `along` are new.
+      'extrude': 'EXTRUDE',
+      'revolve': 'REVOLVE',
+      'sweep': 'SWEEP',
+      'along': 'ALONG',
+
+      // Free-form profile stacks (src/stackform/). Only the two statement
+      // keywords are reserved: the operator names inside a stack block are
+      // read by VALUE, not by token type, so `scale` and `rotate` keep
+      // meaning what they already meant everywhere else in the language.
+      'curve': 'CURVE',
+      'stack': 'STACK',
+
       // Drawing commands
       'draw': 'DRAW',
       'forward': 'FORWARD',
@@ -451,7 +465,7 @@ export class Lexer {
 
   // Helper method to resolve color names to hex values
   static resolveColorName(colorName) {
-    // Delegates to the shared AQUI color palette.
+    // Delegates to the shared Otto color palette.
     return resolveColorName(colorName);
   }
 }

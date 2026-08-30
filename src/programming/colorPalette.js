@@ -1,5 +1,5 @@
 /**
- * @fileoverview The single AQUI color-name → hex table.
+ * @fileoverview The single Otto color-name → hex table.
  *
  * This map was previously duplicated verbatim in Lexer.js, Parser.js, and
  * Interpreter.js (three copies to keep in sync). It now lives here; those
@@ -37,7 +37,7 @@ export const COLOR_MAP = {
 };
 
 /**
- * Resolve an AQUI color name to a hex string. Unknown names pass through
+ * Resolve an Otto color name to a hex string. Unknown names pass through
  * unchanged (they may already be a hex/CSS color).
  *
  * @param {string} colorName

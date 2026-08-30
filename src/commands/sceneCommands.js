@@ -43,7 +43,7 @@ export class SetEdgeJoineryCommand extends Command {
 
 /**
  * Replace the scene's shapes + parameters wholesale — the undo boundary for
- * operations that rebuild the scene (AQUI code run, blocks run, clear-all).
+ * operations that rebuild the scene (Otto code run, blocks run, clear-all).
  *
  * Captures a before snapshot on construction and an after snapshot when the
  * operation completes (call captureAfter()), then is `record()`ed. The

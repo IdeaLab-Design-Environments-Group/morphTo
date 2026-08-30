@@ -27,6 +27,7 @@
  * @module models/shapes/Shape
  */
 import { COMMON_SCHEMA, resolvePropertyValue } from './schema.js';
+import { ProfileError } from './profileSupport.js';
 
 /**
  * Abstract base class for all Otto shapes.
@@ -334,4 +335,56 @@ export class Shape {
         }
         return new this(json.id, json);
     }
+
+    /**
+     * Exact line-and-arc {@link Profile} of this shape, built from its
+     * PARAMETERS — the input to the 3D form pipeline.
+     *
+     * This is deliberately NOT `toGeometryPath()`. That method samples: an
+     * Arc becomes 32 lines, an Ellipse a 64-gon, a RoundedRectangle's corners
+     * 8-segment polylines. Lifting a sampled path would facet every cone and
+     * cylinder, silently, while still looking plausible on screen. So a
+     * profile reads `radius` and `startAngle` directly and keeps them as an
+     * arc. Nothing here changes `toGeometryPath()`, which the canvas,
+     * hit-testing and DXF/SVG export depend on unchanged.
+     *
+     * Only lines and arcs are allowed, because those are the segments with an
+     * exact developable lift under revolution. A shape whose parameters
+     * describe anything else either refuses (Ellipse) or reports
+     * `exact: false` with the measured `deviation` — approximation is never
+     * silent.
+     *
+     * Concrete classes override this. The base refuses rather than guessing.
+     *
+     * @param {Object} [options]
+     * @param {number} [options.tolerance] - Maximum approximation error, mm.
+     *   Defaults to τ/4, leaving the lift the other 3τ/4 of the budget.
+     * @param {boolean} [options.allowEllipseApproximation] - Opt in to a
+     *   biarc-fitted Ellipse, which has no exact form.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `unsupported-shape` if not overridden.
+     */
+    toProfile(options = {}) {
+        throw new ProfileError(
+            'unsupported-shape',
+            `${this.type} has no line-and-arc profile`,
+            this.type
+        );
+    }
+
+    /**
+     * Every closed loop of this shape as a separate Profile, outer boundary
+     * first.
+     *
+     * A {@link Profile} is one contiguous chain, so a shape with a hole — a
+     * Donut, a Gear with a bore — cannot be one profile. Shapes with a single
+     * loop inherit this, which is just `toProfile()` in an array.
+     *
+     * @param {Object} [options] - As {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile[]}
+     */
+    toProfiles(options = {}) {
+        return [this.toProfile(options)];
+    }
+
 }

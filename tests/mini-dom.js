@@ -498,6 +498,10 @@ export class MiniDocument extends EventTargetBase {
         this.head = this.documentElement;
         this.activeElement = null;
         this.defaultView = null;
+        // Browsers leave this at 'interactive' from just before
+        // DOMContentLoaded until every subresource has loaded. Boot code that
+        // reads it must see a real value, not undefined.
+        this.readyState = 'loading';
         this.createContext = createContext || (() => null);
     }
     createElement(tag) { return new MiniElement(tag, this); }

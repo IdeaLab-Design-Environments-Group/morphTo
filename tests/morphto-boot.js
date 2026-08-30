@@ -206,8 +206,16 @@ async function bootMorphToOnce() {
     let bootError = null;
     enter();
     try {
-        await import('../src/main.js');
+        // Reproduce the browser's real ordering, which is the one that bites:
+        // with a module graph this wide the parser finishes and
+        // DOMContentLoaded fires while the graph is still resolving, so
+        // main.js evaluates *after* the event. Dispatching first (and only
+        // first) means boot code that merely registers a DOMContentLoaded
+        // listener never runs -- exactly the browser failure -- and the suite
+        // sees it instead of papering over it.
+        doc.readyState = 'interactive';
         doc.dispatchEvent(new MiniEvent('DOMContentLoaded'));
+        await import('../src/main.js');
         flush();
     } catch (error) {
         bootError = error;

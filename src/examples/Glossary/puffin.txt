@@ -1,0 +1,259 @@
+// Puffin
+//
+// A figure built from stacks: a base profile transformed continuously as it
+// rises, driven by shaping curves. Each part is its own `stack`, and the body
+// unions them at every layer. Naming the parts means each is evaluated once
+// and shared, however many times it is referenced.
+//
+// A stack is FREE-FORM. Unlike extrude, revolve and sweep, none of this
+// flattens into a cut sheet -- it is a form for printing, not for a laser.
+//
+// The lesson of the file is WHERE A FEATURE LIVES. An earlier version tried to
+// carry the head in the body's own radius curve, by adding a sine to a taper
+// so the radius fell and rose again. It cannot be done well: the head, the
+// beak and the wings all want to exist over their own band of height and
+// nowhere else, and a single radius curve has one value per layer to spend on
+// all of them. The result was a vase with a spike. Every feature here is
+// therefore a PART -- its own stack, its own band -- and the body underneath
+// them is a plain teardrop that a single bezier describes exactly.
+
+param height 200
+param girth 48
+
+// --- the body ------------------------------------------------------------
+//
+// Fitted to a penguin silhouette at twelve heights: 0.66 of full width at the
+// floor, widest at t = 0.3, then falling to nothing at the crown. No local
+// maximum anywhere, because the skull is not this curve's job.
+
+curve bodyLine bezier {
+  p0: 0.783
+  h0: [0.325, 1.394]
+  h1: [0.950, 0.633]
+  p1: 0.0
+}
+
+// A bird is deeper front-to-back than it is wide, so every part is squashed
+// on y by the same factor. Naming it once keeps the body and the parts that
+// ride on it from disagreeing about the shape of the section.
+curve squash constant { value: 0.86 }
+
+// The body's own half-width, in millimetres, on each axis. Everything that
+// has to sit ON the surface is offset by one of these: a part whose centre is
+// the wall is half buried, so the union always has something to bite on, and
+// it stays attached however the body swells or narrows underneath it. A fixed
+// offset tears loose the moment the wall moves.
+curve girthMM constant { value: girth }
+curve wallX multiply { a: "bodyLine"  b: "girthMM" }
+curve wallY multiply { a: "wallX"  b: "squash" }
+
+// A slow lean: the layer centre drifts forward as the bird rises. A TRANSLATE,
+// not a rotate -- rotating a section about its own centre leaves it exactly
+// where it was, so `rotate` on a round section is a no-op that costs a sine
+// per layer and changes nothing.
+curve lean bezier {
+  p0: 0
+  h0: [0.4, -1]
+  h1: [0.8, -6]
+  p1: -8
+}
+
+// --- bands ---------------------------------------------------------------
+//
+// Every part below occupies a BAND of height, and a band is where a threshold
+// gate alone goes wrong: gating a constant makes the part appear at full size
+// in a single layer, which is a flat shelf sticking out of the bird. So the
+// SIZE of each part is a half sine stretched across its band -- with
+// f = 1 / (2 x span) and phase = -start, sin((t + phase) x f x 2pi) is exactly
+// zero at both edges and 1 at the centre. The thresholds then only clip what
+// lies outside the band, where that sine would go negative, and because it is
+// already zero at each edge the clip adds no step of its own.
+
+// The head: from t = 0.60 to the crown. span 0.40, f = 1 / 0.80.
+curve headBump sine {
+  frequency: 1.25
+  phase: -0.60
+  amplitude: 1.0
+}
+curve headBand threshold { at: 0.60  low: 0.0  high: 1.0 }
+
+// A half sine is an OGIVE, not a circle: it leaves the pole with finite slope,
+// so the crown comes to a soft point -- which is what made the old head look
+// sharpened. A sphere's profile is sqrt(1 - (2u-1)^2), which meets the pole
+// with a VERTICAL tangent.
+//
+// Both are symmetric about the middle of the band, so ONE map takes the sine
+// to the circle, and `compose` is how a curve is fed through another:
+// compose(a, b)(x) = a(b(x)), with `a` the outer function. Composing on the
+// sine's OUTPUT rather than remapping t keeps every argument inside [0, 1],
+// which is the interval a bezier is defined on. Fitted at 199 heights, the
+// result tracks a true circle to an rms of 0.0006.
+curve headArc bezier {
+  p0: 0.0
+  h0: [0.000, 0.637]
+  h1: [0.920, 0.963]
+  p1: 1.0
+}
+curve headRound compose { a: "headArc"  b: "headBump" }
+curve headLine multiply { a: "headRound"  b: "headBand" }
+
+// The head's own half-width in mm, for the beak to ride on -- the beak sits on
+// the SKULL, not on the body, and by then the body is narrower than the head.
+// MUST match headSection's radius below: this is the same quantity written
+// twice, and the beak rides on it. When only one of the two was changed the
+// bill sat 4 mm off the face.
+curve headRmm constant { value: 30 }
+curve headWall multiply { a: "headLine"  b: "headRmm" }
+
+// The forward nudge onto the shoulders FADES WITH THE HEAD rather than being a
+// constant 3 mm. At the crown the head and the body have both shrunk to
+// nothing, and a constant offset would leave two zero-width contours parked
+// 3 mm apart -- two degenerate rings in the top layer instead of one closed
+// dome. Scaling the nudge by the head's own curve brings them together
+// exactly where they both vanish.
+curve headNudge constant { value: 3 }
+curve headFwd multiply { a: "headLine"  b: "headNudge" }
+
+// The beak: t = 0.82 to 0.95, high on the skull. span 0.13, f = 1 / 0.26.
+curve beakBump sine {
+  frequency: 3.8462
+  phase: -0.82
+  amplitude: 1.0
+}
+curve beakLow threshold { at: 0.82  low: 0.0  high: 1.0 }
+curve beakHigh threshold { at: 0.95  low: 1.0  high: 0.0 }
+curve beakBand multiply { a: "beakLow"  b: "beakHigh" }
+curve beakLine multiply { a: "beakBump"  b: "beakBand" }
+
+// Beyond the skull wall, not merely on it: a puffin's bill stands proud of the
+// face.
+//
+// The reach is scaled by the bill's OWN size curve before being added to the
+// head's half-width. Gating it would not be enough: at the edges of the band
+// the bill has shrunk to nothing but a gated constant would still hold it 6 mm
+// off the face, so the first and last few layers of it would float clear of
+// the head -- measured at 6.92 mm adrift before this line was written. Scaling
+// by `beakBump` puts the bill exactly on the wall wherever it is small, and
+// its full reach only where it is full size.
+curve beakReach constant { value: 6 }
+curve beakLift multiply { a: "beakBump"  b: "beakReach" }
+curve beakStand add { a: "headWall"  b: "beakLift" }
+curve beakOut multiply { a: "beakBand"  b: "beakStand" }
+
+// The wings: t = 0.14 to 0.56, low on the body. span 0.42, f = 1 / 0.84.
+curve wingBump sine {
+  frequency: 1.1905
+  phase: -0.14
+  amplitude: 1.0
+}
+curve wingLow threshold { at: 0.14  low: 0.0  high: 1.0 }
+curve wingHigh threshold { at: 0.56  low: 1.0  high: 0.0 }
+curve wingBand multiply { a: "wingLow"  b: "wingHigh" }
+curve wingLine multiply { a: "wingBump"  b: "wingBand" }
+curve wingOut multiply { a: "wingBand"  b: "wallY" }
+
+// There is no unary minus on a curve, so the far side is a multiply by -1.
+curve flip constant { value: -1 }
+curve wingOutFar multiply { a: "wingOut"  b: "flip" }
+
+// The feet: t = 0 to 0.10, and unlike the others they are WIDEST AT THE FLOOR,
+// so the band is a quarter period rather than a half -- 1 at t = 0, 0 at the
+// top of the band. f = 1 / (4 x span) and phase = span, so that
+// (0 + phase) x f x 2pi = pi/2 at the bottom and pi at the top.
+curve footBump sine {
+  frequency: 2.5
+  phase: 0.1
+  amplitude: 1.0
+}
+curve footBand threshold { at: 0.10  low: 1.0  high: 0.0 }
+curve footLine multiply { a: "footBump"  b: "footBand" }
+
+// Forward of centre but inside the wall, so a foot reads as a foot rather than
+// as a shelf: three quarters of the way out, and split left and right.
+curve footReach constant { value: 0.75 }
+curve footFwd multiply { a: "wallX"  b: "footReach" }
+curve footOut multiply { a: "footBand"  b: "footFwd" }
+curve footSpread constant { value: 13 }
+curve footSide multiply { a: "footBand"  b: "footSpread" }
+curve footSideFar multiply { a: "footSide"  b: "flip" }
+
+// --- parts ---------------------------------------------------------------
+
+shape circle bodySection { radius: girth }
+shape circle headSection { radius: 30 }
+shape circle beakSection { radius: 13 }
+shape circle wingSection { radius: 24 }
+shape circle footSection { radius: 15 }
+
+// The head is concentric with the body, so it needs no offset to stay
+// attached -- only the same squash, and a nudge forward onto the shoulders.
+stack head from headSection {
+  height: height
+  layers: 90
+  scale headLine
+  scaleY 0.86
+  translateX headFwd
+}
+
+stack beak from beakSection {
+  height: height
+  layers: 90
+  scale beakLine
+  translateX beakOut
+}
+
+// `scaleY 0.30` is what makes a wing a wing rather than a bulge: the circle is
+// squashed along the axis it protrudes on, leaving a paddle that is long
+// front-to-back and thin sideways. It comes AFTER `scale`, so it squashes the
+// sized wing rather than being scaled away by it.
+stack wingNear from wingSection {
+  height: height
+  layers: 90
+  scale wingLine
+  scaleY 0.30
+  translateY wingOut
+}
+
+stack wingFar from wingSection {
+  height: height
+  layers: 90
+  scale wingLine
+  scaleY 0.30
+  translateY wingOutFar
+}
+
+stack footNear from footSection {
+  height: height
+  layers: 90
+  scale footLine
+  scaleY 0.55
+  translateX footOut
+  translateY footSide
+}
+
+stack footFar from footSection {
+  height: height
+  layers: 90
+  scale footLine
+  scaleY 0.55
+  translateX footOut
+  translateY footSideFar
+}
+
+// The main program. Order is the design: the body is scaled and squashed
+// before the unions, or the parts would be scaled along with it instead of
+// added to it -- and the lean comes after them, so it carries the head, beak,
+// wings and feet with the body rather than sliding the body out from under.
+stack puffin from bodySection {
+  height: height
+  layers: 90
+  scale bodyLine
+  scaleY 0.86
+  union head
+  union beak
+  union wingNear
+  union wingFar
+  union footNear
+  union footFar
+  translateX lean
+}

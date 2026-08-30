@@ -14,6 +14,8 @@
  * in morphTo's footer.
  */
 import { test, assert, assertEqual } from '../harness.js';
+import { Lexer } from '../../src/programming/Lexer.js';
+import { Parser } from '../../src/programming/Parser.js';
 import { bootMorphTo, IS_NODE } from '../morphto-boot.js';
 import { BlocksEditor } from '../../src/ui/BlocksEditor.js';
 
@@ -117,4 +119,52 @@ test('clearing the workspace stays reachable without a button', async () => {
             assertEqual(typeof editor[name], 'function', `${name}() intact`);
         }
     });
+});
+
+// ---- the Examples registry ------------------------------------------------
+
+test('every registered example names a file that exists and parses', async () => {
+    if (!IS_NODE) return;
+    const { readFileSync } = await import('node:fs');
+    const root = new URL('../../', import.meta.url);
+    const registry = readFileSync(new URL('src/examples.js', root), 'utf8');
+
+    // The registry is a literal inside a DOMContentLoaded closure, so it is
+    // read as text rather than imported. Pairs are `file: './path'`.
+    const files = [...registry.matchAll(/file:\s*'\.\/([^']+)'/g)].map(m => m[1]);
+    assert(files.length > 10, `the registry was found, got ${files.length} entries`);
+    assert(files.some(f => f.endsWith('puffin.txt')), 'the puffin is registered');
+
+    for (const file of files) {
+        let source;
+        try {
+            source = readFileSync(new URL(file, root), 'utf8');
+        } catch {
+            assert(false, `${file} is registered but missing from disk`);
+            continue;
+        }
+        // A card whose source does not parse shows an empty workspace with no
+        // explanation, because rebuildWorkspaceFromOtto reports failure by
+        // returning false rather than throwing.
+        try {
+            new Parser(new Lexer(source)).parse();
+        } catch (error) {
+            assert(false, `${file} does not parse: ${error.message}`);
+        }
+    }
+});
+
+test('every example card in index.html has a registry entry, and vice versa', async () => {
+    if (!IS_NODE) return;
+    const { readFileSync } = await import('node:fs');
+    const root = new URL('../../', import.meta.url);
+    const html = readFileSync(new URL('index.html', root), 'utf8');
+    const registry = readFileSync(new URL('src/examples.js', root), 'utf8');
+
+    // A card with no entry opens a detail view with nothing in it; an entry
+    // with no card is simply unreachable. Neither fails loudly on its own.
+    const cards = [...html.matchAll(/data-example="([^"]+)"/g)].map(m => m[1]).sort();
+    const keys = [...registry.matchAll(/^\s*'([\w-]+)':\s*\{$/gm)].map(m => m[1]).sort();
+    assertEqual(cards.join(','), keys.join(','), 'cards and registry entries match exactly');
+    assert(cards.includes('puffin'), 'including the puffin');
 });

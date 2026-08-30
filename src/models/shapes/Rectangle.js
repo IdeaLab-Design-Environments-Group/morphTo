@@ -13,6 +13,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill used exclusively for hit-testing (see Circle.js for why).
@@ -91,4 +92,24 @@ export class Rectangle extends Shape {
     toGeometryPath() {
         return GeoPath.rect(this.x, this.y, this.width, this.height);
     }
+
+    /**
+     * Four lines, closed and exact. See {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        const { x, y, width: w, height: h } = this;
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints([
+                { x, y },
+                { x: x + w, y },
+                { x: x + w, y: y + h },
+                { x, y: y + h }
+            ], true, 'edge'),
+            closed: true
+        });
+    }
+
 }

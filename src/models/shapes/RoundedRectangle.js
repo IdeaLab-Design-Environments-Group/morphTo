@@ -24,6 +24,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { arcSegment, buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -175,4 +176,69 @@ export class RoundedRectangle extends Shape {
 
         return GeoPath.fromPoints(points, true);
     }
+
+    /**
+     * Four lines and four quarter arcs, closed and exact, at
+     * `r = min(cornerRadius, width/2, height/2)` — the same clamp
+     * {@link RoundedRectangle#toGeometryPath} applies, so the two agree on
+     * shape while only this one keeps the corners as arcs. That method turns
+     * each corner into an 8-segment polyline; lifting those would facet every
+     * fillet.
+     *
+     * Traversal matches `toGeometryPath()`: top edge, top-right corner, right
+     * edge, bottom-right corner, and so on. Angles are RADIANS here (the
+     * model has no degree-valued angle property for this shape).
+     *
+     * A radius that reaches half the width or height collapses the edge
+     * between two corners; those zero-length lines are dropped, so a stadium
+     * comes out as arcs and the two surviving edges rather than failing
+     * validation.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        const w = this.width / 2;
+        const h = this.height / 2;
+        const cx = this.x + w;
+        const cy = this.y + h;
+        const r = Math.min(this.cornerRadius, w, h);
+
+        if (!(r > 0)) {
+            return buildProfile({
+                id: this.id,
+                shapeType: this.type,
+                segments: linesFromPoints([
+                    { x: this.x, y: this.y },
+                    { x: this.x + this.width, y: this.y },
+                    { x: this.x + this.width, y: this.y + this.height },
+                    { x: this.x, y: this.y + this.height }
+                ], true, 'edge'),
+                closed: true
+            });
+        }
+
+        const HALF_PI = Math.PI / 2;
+        // Each entry: the edge leading into a corner, then that corner's arc
+        // centre and start angle. Clockwise on screen, starting at the top.
+        const quadrants = [
+            [{ x: cx - w + r, y: cy - h }, { x: cx + w - r, y: cy - h }, cx + w - r, cy - h + r, -HALF_PI],
+            [{ x: cx + w, y: cy - h + r }, { x: cx + w, y: cy + h - r }, cx + w - r, cy + h - r, 0],
+            [{ x: cx + w - r, y: cy + h }, { x: cx - w + r, y: cy + h }, cx - w + r, cy + h - r, HALF_PI],
+            [{ x: cx - w, y: cy + h - r }, { x: cx - w, y: cy - h + r }, cx - w + r, cy - h + r, Math.PI]
+        ];
+
+        const segments = [];
+        for (const [from, to, arcX, arcY, a0] of quadrants) {
+            segments.push(...linesFromPoints([from, to], false, 'edge'));
+            segments.push(arcSegment(arcX, arcY, r, a0, a0 + HALF_PI, true, 'corner'));
+        }
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments,
+            closed: true
+        });
+    }
+
 }

@@ -6,6 +6,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 const HIT_TEST_FILL = new GeoFill(new GeoColor(0, 0, 0, 1));
 
@@ -75,4 +76,22 @@ export class ChamferRectangle extends Shape {
             { x: cx - w, y: cy - h + c }
         ];
     }
+
+    /**
+     * Eight lines, closed and exact — {@link ChamferRectangle#getPoints}
+     * verbatim, including its clamp of the chamfer to half the smaller side.
+     * A zero chamfer collapses each corner pair onto one vertex; those
+     * zero-length edges are dropped, leaving a plain four-line rectangle.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(this.getPoints(), true, 'edge'),
+            closed: true
+        });
+    }
+
 }

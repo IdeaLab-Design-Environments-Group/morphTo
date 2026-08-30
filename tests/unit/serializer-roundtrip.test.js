@@ -17,6 +17,7 @@ import { test, assert, assertEqual, assertDeepEqual } from '../harness.js';
 import { loadFixtureText } from '../fixture-io.js';
 import { buildFixtureTabManager, FIXTURE_SHAPES } from '../fixtures/scene-fixture.js';
 import { Serializer } from '../../src/persistence/Serializer.js';
+import { FileManager } from '../../src/persistence/FileManager.js';
 
 test('fixture builder output matches captured scene-v2.json byte-for-byte', async () => {
     const expected = await loadFixtureText('scene-v2.json');
@@ -83,4 +84,80 @@ test('viewport round-trips', async () => {
     const original = buildFixtureTabManager();
     const restored = await Serializer.deserialize(Serializer.serialize(original));
     assertDeepEqual(restored.getActiveScene().viewport, { x: 12, y: -8, zoom: 1.25 });
+});
+
+/*
+ * Save-file extension. The format was renamed .pds → .otto along with the
+ * language; save writes .otto, but load must still open the .pds files users
+ * already have on disk.
+ */
+
+/** Run `body` with the browser bits FileManager touches installed. */
+async function withBrowserStubs(body) {
+    const saved = {
+        document: globalThis.document,
+        FileReader: globalThis.FileReader,
+        alert: globalThis.alert
+    };
+    const downloads = [];
+    globalThis.document = {
+        createElement: () => ({ href: '', download: '', click() {} }),
+        body: { appendChild(link) { downloads.push(link.download); }, removeChild() {} }
+    };
+    globalThis.FileReader = class {
+        readAsText(file) {
+            file.text().then(
+                (text) => this.onload({ target: { result: text } }),
+                () => this.onerror(new Error('read failed'))
+            );
+        }
+    };
+    globalThis.alert = () => {};
+    try {
+        return await body(downloads);
+    } finally {
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+        }
+    }
+}
+
+/** A saved scene as a named File, exactly as it would come off disk. */
+function savedSceneFile(name) {
+    return new File([Serializer.serialize(buildFixtureTabManager())], name);
+}
+
+test('a legacy .pds save still opens', async () => {
+    await withBrowserStubs(async () => {
+        const restored = await new FileManager(null).importFromFile(savedSceneFile('scene.pds'));
+        assert(restored, '.pds file failed to open');
+        assertEqual(restored.tabs.length, 1);
+        assertEqual(
+            restored.getActiveScene().shapeStore.getAll().length,
+            FIXTURE_SHAPES.length,
+            'shapes lost loading .pds'
+        );
+    });
+});
+
+test('an .otto save opens', async () => {
+    await withBrowserStubs(async () => {
+        const restored = await new FileManager(null).importFromFile(savedSceneFile('scene.otto'));
+        assert(restored, '.otto file failed to open');
+        assertEqual(restored.tabs.length, 1);
+    });
+});
+
+test('an unrelated extension is still rejected', async () => {
+    await withBrowserStubs(async () => {
+        assertEqual(await new FileManager(null).importFromFile(savedSceneFile('scene.txt')), null);
+    });
+});
+
+test('saving writes .otto, not .pds', async () => {
+    await withBrowserStubs(async (downloads) => {
+        assert(new FileManager(buildFixtureTabManager()).exportToFile(), 'export failed');
+        assertEqual(downloads.length, 1, 'expected one download');
+        assert(downloads[0].endsWith('.otto'), `saved as ${downloads[0]}, expected .otto`);
+    });
 });

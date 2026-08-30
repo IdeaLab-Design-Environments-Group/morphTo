@@ -20,7 +20,7 @@
  *                   resolved per-frame by Shape.resolve(). Default false.
  *   translate       'x' | 'y' — the property shifts by dx/dy in Shape.translate().
  *   aliases         Alternative option names accepted at construction time
- *                   (AQUI snake_case names, legacy names). First hit wins.
+ *                   (Otto snake_case names, legacy names). First hit wins.
  *   copy            `(value) => copy` deep-copier used by the constructor and
  *                   `toOptions()` for reference-typed values (point arrays…).
  *   serialize       `(value) => jsonValue` transform applied in `toJSON()`.
@@ -62,7 +62,7 @@ export const COMMON_SCHEMA = {
     // property, not a 3D one: the fabrication rules read it for material
     // checks and it pairs with joinery. Bindable (drive it from a parameter
     // like any other dimension) and it flows through the whole stack
-    // automatically: Properties Panel rows, serialization, AQUI `depth:`
+    // automatically: Properties Panel rows, serialization, Otto `depth:`
     // params, and the Blocks generic property blocks.
     depth: {
         type: 'number',

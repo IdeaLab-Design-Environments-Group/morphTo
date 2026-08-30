@@ -22,6 +22,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 /**
  * Opaque black fill for hit-testing.  See Circle.js for full explanation.
@@ -122,4 +123,34 @@ export class Polygon extends Shape {
 
         return GeoPath.fromPoints(points, true); // Closed polygon
     }
+
+    /**
+     * N lines, closed and exact — the same vertices
+     * {@link Polygon#toGeometryPath} computes, including the minimum of 3
+     * sides and the -PI/2 start angle that puts a vertex at the top.
+     * See {@link Shape#toProfile}.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        const sides = Math.max(3, Math.floor(this.sides));
+        const angleStep = (2 * Math.PI) / sides;
+        const startAngle = -Math.PI / 2;
+        const points = [];
+
+        for (let i = 0; i < sides; i++) {
+            const angle = startAngle + i * angleStep;
+            points.push({
+                x: this.centerX + this.radius * Math.cos(angle),
+                y: this.centerY + this.radius * Math.sin(angle)
+            });
+        }
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(points, true, 'edge'),
+            closed: true
+        });
+    }
+
 }

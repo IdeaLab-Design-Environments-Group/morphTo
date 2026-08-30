@@ -6,6 +6,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { buildProfile, linesFromPoints } from './profileSupport.js';
 
 const HIT_TEST_FILL = new GeoFill(new GeoColor(0, 0, 0, 1));
 
@@ -77,4 +78,20 @@ export class Arrow extends Shape {
             { x: sx, y: sy + shaftWidth / 2 }
         ];
     }
+
+    /**
+     * Seven lines, closed and exact — {@link Arrow#getPoints} verbatim,
+     * including its clamps on head width, head length and shaft width.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(this.getPoints(), true, 'edge'),
+            closed: true
+        });
+    }
+
 }

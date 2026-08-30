@@ -7,6 +7,7 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { ProfileError, buildProfile, circleArcs, linesFromPoints } from './profileSupport.js';
 
 const HIT_TEST_FILL = new GeoFill(new GeoColor(0, 0, 0, 1));
 
@@ -121,4 +122,57 @@ export class Gear extends Shape {
 
         return points;
     }
+
+    /**
+     * The gear OUTLINE as lines, closed and exact.
+     *
+     * Exact because this gear's teeth are defined as a polygon and nothing
+     * else — see {@link Gear#getPoints}: "not an involute gear; a clean,
+     * visually gear-like polygon". The lines reproduce those vertices
+     * verbatim, so there is nothing to approximate. (A real involute flank
+     * would be a curve and would have to be fitted.)
+     *
+     * The bore is a second loop and cannot share this contiguous chain —
+     * use {@link Gear#toProfiles}.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile}
+     */
+    toProfile() {
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments: linesFromPoints(this.getPoints(), true, 'tooth'),
+            closed: true
+        });
+    }
+
+    /**
+     * The outline, then the bore if there is one.
+     *
+     * The bore is four exact quarter arcs, traced the opposite way round to
+     * mark it as a hole — the same convention {@link Donut#toProfiles} uses.
+     * Its diameter follows {@link Gear#toGeometryPath}: 40% of the pitch
+     * diameter when `boreDiameter` is null.
+     *
+     * @returns {import('../../form3d/Profile.js').Profile[]}
+     */
+    toProfiles() {
+        const profiles = [this.toProfile()];
+
+        const bore = (this.boreDiameter == null)
+            ? Math.max(0, (this.pitchDiameter || 0) * 0.4)
+            : Number(this.boreDiameter);
+
+        if (bore > 0) {
+            profiles.push(buildProfile({
+                id: `${this.id}/bore`,
+                shapeType: this.type,
+                segments: circleArcs(this.centerX, this.centerY, bore / 2, 'bore', false),
+                closed: true
+            }));
+        }
+
+        return profiles;
+    }
+
 }

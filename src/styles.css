@@ -123,6 +123,43 @@ body {
   background: #d0d0d0;
 }
 
+/* Editor mode control: Code | Blocks | Shapes.
+   One segmented control rather than three loose buttons, because the three
+   are mutually exclusive views of the same document and a segment group is
+   how that reads. Sized off .button (8px/16px, monospace) so it carries the
+   same weight as the rest of the chrome. */
+.editor-modes {
+  display: inline-flex;
+  flex: none;
+  background: #e0e0e0;
+  border-radius: 4px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.editor-mode {
+  padding: 6px 14px;
+  font-family: monospace;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.editor-mode:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #222;
+}
+
+.editor-mode.active {
+  background: #ffffff;
+  color: #222;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
 /* Multi-document tabs (Code editor) */
 .editor-top-row {
   display: flex;
@@ -224,7 +261,11 @@ body {
   min-width: 120px;
 }
 
-.export-menu.show {
+/* `visible` is the class MorphToShell.wireExportMenu toggles, and the one
+   every other panel in the app uses (#ast-panel, #error-panel). The rule used
+   to be written for `.show`, which nothing ever added -- so the menu was
+   wired, dispatched correctly, and never appeared. */
+.export-menu.visible {
   display: block;
 }
 
@@ -795,43 +836,6 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-/* Grid toggle button */
-.grid-toggle-button {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  color: #6B7280;
-  z-index: 100;
-}
-
-.grid-toggle-button:hover {
-  background: rgba(255, 255, 255, 1);
-  color: #FF5722;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.grid-toggle-button.active {
-  background: #FF5722;
-  color: white;
-}
-
-.grid-toggle-button.active:hover {
-  background: #E64A19;
-}
-
 /* Modern toolbar styling */
 .canvas-toolbar {
   position: absolute;
@@ -1081,98 +1085,18 @@ body {
 
 /* Drag & Drop Shape Palette Styles */
 
-/* Toggle Button - positioned on right side of top area */
-.palette-toggle-button {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: #6B7280;
-  transition: all 0.2s ease;
-  z-index: 100;
-  font-weight: bold;
-}
-
-.palette-toggle-button:hover {
-  background: rgba(255, 255, 255, 1);
-  color: #FF5722;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Main Palette Container */
-.shape-palette-container {
-  position: fixed;
-  top: 70px;
-  right: 16px;
-  width: 280px;
-  max-height: 400px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  z-index: 1000;
-  opacity: 0;
-  transform: translateY(-10px) scale(0.95);
-  pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.shape-palette-container.visible {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: all;
-}
-
-/* Palette Header */
-.palette-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.palette-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #374151;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-
-.close-palette {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #9CA3AF;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.close-palette:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #374151;
+/* Shapes pane: the third editor mode, peer of the code and blocks panes. */
+#shape-palette-pane {
+  flex-direction: column;
+  min-height: 0;          /* so the content scrolls instead of pushing the panel */
+  background: #fdf6e3;    /* the code editor's ground, so the modes read as one surface */
 }
 
 /* Palette Content */
 .palette-content {
   padding: 16px;
-  max-height: 320px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -1198,8 +1122,9 @@ body {
 /* Palette Grid */
 .palette-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px;
+  align-content: start;
 }
 
 /* Individual Palette Items */
@@ -1290,13 +1215,6 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .shape-palette-container {
-    right: 8px;
-    left: 8px;
-    width: auto;
-    max-height: 300px;
-  }
-  
   .palette-grid {
     grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
     gap: 8px;
@@ -1323,26 +1241,8 @@ body {
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .shape-palette-container {
+  #shape-palette-pane {
     background: rgba(31, 41, 55, 0.95);
-    border: 1px solid rgba(75, 85, 99, 0.3);
-  }
-  
-  .palette-header {
-    border-bottom-color: rgba(75, 85, 99, 0.3);
-  }
-  
-  .palette-header h3 {
-    color: #F3F4F6;
-  }
-  
-  .close-palette {
-    color: #9CA3AF;
-  }
-  
-  .close-palette:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #F3F4F6;
   }
   
   .palette-item {
@@ -1370,15 +1270,6 @@ body {
     color: #F3F4F6;
   }
   
-  .palette-toggle-button {
-    background: rgba(55, 65, 81, 0.9);
-    color: #D1D5DB;
-  }
-  
-  .palette-toggle-button:hover {
-    background: rgba(55, 65, 81, 1);
-    color: #FF5722;
-  }
 }
 
 /* Animation for shape creation feedback */
@@ -1425,7 +1316,7 @@ body {
   outline-offset: 2px;
 }
 
-.palette-toggle-button:focus {
+.editor-mode:focus-visible {
   outline: 2px solid #FF5722;
   outline-offset: 2px;
 }
@@ -1782,25 +1673,274 @@ body {
 .palette-grid .palette-item:nth-child(17) { animation-delay: 0.85s; }
 
 /* ── Constraints popup ─────────────────────────────────────────────────────
-   morphTo's constraints panel is its own popup, not a .parameters-container:
-   ui.mjs:44-49 built it as a fixed, bottom-right, white, monospace card wide
-   enough for the builder's paired selects. Those styles were inline on an
-   element ui.mjs created; the panel lives in index.html here, so they become
-   a rule. Toggled by ConstraintController.togglePanel, which sets display. */
+   The panel morphTo built in ui.mjs styled every control inline, which is
+   exactly why it never matched the rest of Otto -- inline styles win, so the
+   panel could not inherit the chrome. The controls now carry classes and the
+   look lives here, on the same scheme as the code interface: monospace
+   throughout, #e0e0e0 buttons, 4px radii, #FF5722 for the accent and focus.
+   Toggled by ConstraintController.togglePanel, which sets display. */
 #constraints-panel {
   position: fixed;
   right: 12px;
   bottom: 64px;
-  min-width: 400px;
-  max-width: 460px;
+  width: 380px;
+  max-width: calc(100vw - 24px);
   z-index: 9999;
-  background: #fff;
+  background: #f8f8f8;
   border: 1px solid #ccc;
   border-radius: 6px;
-  box-shadow: 0 10px 24px rgba(0,0,0,.15);
-  padding: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .15);
   font-family: monospace;
+  font-size: 13px;
+  color: #333;
   display: none;
   max-height: 70vh;
   overflow-y: auto;
+}
+
+/* Header: sticky, so the title and the way out stay put while the builder
+   scrolls under them. */
+.constraints-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #ddd;
+}
+
+.constraints-title {
+  margin: 0;
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: bold;
+  color: #222;
+}
+
+.constraints-close {
+  border: none;
+  background: none;
+  font-family: monospace;
+  font-size: 18px;
+  line-height: 1;
+  color: #888;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.constraints-close:hover {
+  background: #e0e0e0;
+  color: #222;
+}
+
+/* ── A builder section ──────────────────────────────────────────────────── */
+.constraint-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e4e4e4;
+}
+
+.constraint-section:last-child {
+  border-bottom: none;
+}
+
+.constraint-section__title {
+  margin: 0 0 10px;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #FF5722;
+}
+
+/* Two columns: A on the left, B on the right, shapes above their anchors. */
+.constraint-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* A captioned control. The selects used to be anonymous -- four dropdowns in
+   two rows with nothing saying which was which. */
+.constraint-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.constraint-field__label {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+#constraints-panel select,
+#constraints-panel input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+#constraints-panel select:hover,
+#constraints-panel input:hover {
+  border-color: #aaa;
+}
+
+#constraints-panel select:focus,
+#constraints-panel input:focus {
+  outline: none;
+  border-color: #FF5722;
+  box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.18);
+}
+
+/* The Distance field spans the pair, since it is one value for both ends. */
+.constraint-section .constraint-field:not(.constraint-grid .constraint-field) {
+  margin-top: 8px;
+}
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+.constraint-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Sized off .button (8px/16px monospace on #e0e0e0) so the panel's actions
+   carry the same weight as the footer's. */
+.constraint-action {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #333;
+  background: #e0e0e0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.constraint-action:hover {
+  background: #d0d0d0;
+}
+
+.constraint-action:active {
+  background: #FF5722;
+  color: #fff;
+}
+
+.constraint-action:focus-visible {
+  outline: 2px solid #FF5722;
+  outline-offset: 2px;
+}
+
+/* ── The active list ────────────────────────────────────────────────────── */
+.constraints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.constraint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.constraint-row__label {
+  font-family: monospace;
+  font-size: 12px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.constraint-row__remove {
+  flex: none;
+  border: none;
+  background: none;
+  font-family: monospace;
+  font-size: 15px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.constraint-row__remove:hover {
+  background: #ffe9e2;
+  color: #c0392b;
+}
+
+/* An empty box reads as broken; saying so reads as empty. */
+.constraints-empty {
+  font-family: monospace;
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+/* ── 3D form viewport ──────────────────────────────────────────────────────
+   The preview of a lifted developable form (src/views/viewport3d/). It sits
+   over the 2D canvas inside the same .visualization-panel rather than taking
+   a panel of its own, so both views share one work area and one set of
+   surrounding chrome. Hidden until a form exists; whoever builds one reveals
+   it. Appended at EOF like every other addition to this file, so morphTo's
+   own rules above stay byte-identical. */
+.viewport3d-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #FAFAFA;
+  z-index: 2;
+}
+
+/* The empty-state message on the GPU path. A GPU draws triangles, so the
+   text Renderer3D paints into the canvas is an element here instead. */
+.viewport3d-empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 13px monospace;
+  color: #9CA3AF;
+  pointer-events: none;
+}
+
+#viewport3d-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  /* Orbit and pan are pointer gestures; the browser must not steal them for
+     scrolling the page on a trackpad or a touch screen. */
+  touch-action: none;
 }

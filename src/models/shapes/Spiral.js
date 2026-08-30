@@ -7,6 +7,8 @@ import {
     Vec as GeoVec,
     styleContainsPoint
 } from '../../geometry/index.js';
+import { Vec } from '../../geometry/Vec.js';
+import { DEFAULT_PROFILE_TOLERANCE, ProfileError, buildProfile, fitParametric } from './profileSupport.js';
 
 const HIT_TEST_STROKE = new GeoStroke(new GeoColor(0, 0, 0, 1), false, 6, 'centered', 'round', 'round', 4);
 
@@ -74,4 +76,69 @@ export class Spiral extends Shape {
 
         return points;
     }
+
+    /**
+     * An Archimedean spiral has no exact line-and-arc form, so this is a
+     * polyline refined until the analytic curve is within τ_profile of it.
+     *
+     * `exact: false` and `deviation` is measured against the spiral itself,
+     * not against the 100-point sampling {@link Spiral#getPoints} uses for
+     * rendering — shipping that fixed sampling would put an unreported error
+     * into the lift. The step is halved until the measurement meets the
+     * tolerance, so the approximation stays inside the error budget and says
+     * what it cost.
+     *
+     * @param {Object} [options]
+     * @param {number} [options.tolerance] - τ_profile, mm.
+     * @returns {import('../../form3d/Profile.js').Profile}
+     * @throws {ProfileError} code `degenerate` when the spiral has no extent.
+     */
+    toProfile({ tolerance = DEFAULT_PROFILE_TOLERANCE } = {}) {
+        if (!(this.turns > 0) || (!(this.startRadius > 0) && !(this.endRadius > 0))) {
+            throw new ProfileError(
+                'degenerate',
+                `Spiral "${this.id}" has no extent (turns ${this.turns}, radii ${this.startRadius} to ${this.endRadius})`,
+                this.type
+            );
+        }
+
+        // Archimedean spiral, parameterised over t in [0, 1]:
+        //   theta(t) = t * turns * 2*PI     r(t) = startRadius + (endRadius - startRadius) * t
+        // The derivative is the product rule on (r cos theta, r sin theta),
+        // and it is what lets each piece become a tangent-matched cubic
+        // rather than a chord.
+        const cx = this.centerX;
+        const cy = this.centerY;
+        const totalAngle = this.turns * Math.PI * 2;
+        const dr = this.endRadius - this.startRadius;
+        const radiusAt = (t) => this.startRadius + dr * t;
+
+        const { segments, deviation } = fitParametric({
+            point: (t) => {
+                const a = t * totalAngle;
+                const r = radiusAt(t);
+                return new Vec(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+            },
+            derivative: (t) => {
+                const a = t * totalAngle;
+                const r = radiusAt(t);
+                return new Vec(
+                    -Math.sin(a) * totalAngle * r + Math.cos(a) * dr,
+                    Math.cos(a) * totalAngle * r + Math.sin(a) * dr
+                );
+            },
+            tolerance,
+            region: 'edge'
+        });
+
+        return buildProfile({
+            id: this.id,
+            shapeType: this.type,
+            segments,
+            closed: false,
+            exact: false,
+            deviation
+        });
+    }
+
 }
